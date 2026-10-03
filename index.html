@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Conciliaciones SILOG V1</title>
+  <link rel="stylesheet" href="css/estilos.css?v=20261003d">
+</head>
+<body data-modo="V1">
+  <a class="saltar" href="#vista">Saltar al contenido</a>
+  <header class="barra-superior">
+    <div class="marca">
+      <span class="logo" aria-hidden="true">SV1</span>
+      <div><strong>Conciliaciones SILOG V1</strong><small>Prototipo de estudio · datos ficticios</small></div>
+    </div>
+    <div class="controles">
+      <label>Escenario de prueba
+        <select id="escenario" data-ayuda="escenario"></select>
+      </label>
+      <label>Modo
+        <select id="modo" data-ayuda="modo">
+          <option value="V1">V1: cómo funciona hoy</option>
+          <option value="PROPUESTO">Propuesto: cómo debería funcionar</option>
+        </select>
+      </label>
+      <label>Usuario simulado
+        <select id="rol" data-ayuda="rol">
+          <option>Analista LOG</option>
+          <option>Jefe LOG</option>
+          <option>Gerente de Dist. y Ventas</option>
+          <option>Transportista</option>
+        </select>
+      </label>
+      <span class="hoy">Hoy: <strong id="hoy"></strong></span>
+      <button id="guia-toggle" class="btn primario" aria-pressed="false" title="Abre la tarjeta que te guía paso a paso">▶ Guía</button>
+      <button id="ayuda-toggle" class="btn" aria-pressed="false" title="Activa el modo ayuda: los clics explican en vez de ejecutar">? Ayuda</button>
+      <button id="reiniciar" data-ayuda="reiniciar" class="btn" title="Vuelve el escenario elegido a sus datos iniciales y desmarca los pasos del guion">Reiniciar escenario</button>
+    </div>
+  </header>
+  <div class="cuerpo">
+    <nav id="menu" class="menu" aria-label="Vistas del prototipo"></nav>
+    <main id="vista" class="vista" tabindex="-1"></main>
+  </div>
+  <aside id="tour" class="tour" hidden aria-live="polite" aria-label="Recorrido guiado"></aside>
+  <div id="popover-ayuda" class="popover-ayuda" hidden role="dialog" aria-label="Ayuda"></div>
+  <script>window.SILOG = { SIN_SQL: true };</script>
+  <script src="js/datos.js?v=20261003d"></script>
+  <script src="js/escenarios.js?v=20261003d"></script>
+  <script src="js/fuentes.js?v=20261003d"></script>
+  <script src="js/motor.js?v=20261003d"></script>
+  <script src="js/tour.js?v=20261003d"></script>
+  <script src="js/recorrido_ot.js?v=20261003d"></script>
+  <script src="js/ayuda.js?v=20261003d"></script>
+  <script src="js/estado.js?v=20261003d"></script>
+  <script src="js/vistas.js?v=20261003d"></script>
+  <script src="js/app.js?v=20261003d"></script>
+</body>
+</html>
