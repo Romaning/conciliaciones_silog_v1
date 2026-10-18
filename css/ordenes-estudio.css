@@ -1,0 +1,20 @@
+/* Solo el recorrido de órdenes; tipografía, botones y colores proceden del tema existente. */
+.od-estudio { min-width: 0; }
+.od-pasos, .od-recorrido { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 10px; margin: 18px 0; }
+.od-pasos .btn { min-height: 44px; white-space: normal; text-align: left; }
+.od-pasos [aria-current="step"], .od-recorrido .od-actual { border-color: var(--primario); background: var(--resaltado); font-weight: 700; }
+.od-recorrido { padding: 0; list-style: none; }
+.od-recorrido li, .od-cre { padding: 16px; border: 1px solid var(--borde); border-radius: var(--radio); }
+.od-estudio small { display: block; color: var(--tenue); font-weight: 400; margin-top: 5px; }
+.od-acciones { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin: 16px 0; }
+.od-campos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: end; gap: 16px; margin: 16px 0; }
+.od-campos label { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.od-campos input, .od-campos select { width: 100%; min-width: 0; box-sizing: border-box; }
+.od-estudio th, .od-estudio td { white-space: normal; vertical-align: top; min-width: 110px; }
+.od-estudio caption { text-align: left; color: var(--tenue); padding: 8px 0; }
+.od-cre { margin: 14px 0; }
+.od-navegacion { justify-content: space-between; border-top: 1px solid var(--borde); padding-top: 14px; }
+.od-check { display: flex; gap: 8px; align-items: center; margin: 10px 0; }
+.od-resumen { padding: 12px; background: var(--resaltado); border-radius: var(--radio); }
+@media (max-width: 1000px) { .od-campos { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 650px) { .od-campos { grid-template-columns: minmax(0, 1fr); } .od-acciones .btn { width: 100%; white-space: normal; } }

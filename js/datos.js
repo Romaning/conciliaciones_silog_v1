@@ -8,6 +8,32 @@ window.SILOG = window.SILOG || {};
 
 SILOG.HOY = '2026-10-02';
 
+// Catálogos de la pantalla transversal de V1. Se mantienen separados de los
+// datos simulados para distinguir el catálogo funcional de la cobertura del prototipo.
+SILOG.CATALOGOS_V1 = {
+  tiposConciliacion: [
+    { valor: 'Todos', nombre: 'Todos', modelado: true },
+    { valor: 'Cisterna', nombre: 'Cisterna', modelado: true },
+    { valor: 'Barcaza', nombre: 'Barcaza', modelado: false },
+    { valor: 'Vagon', nombre: 'Vagón', modelado: false },
+    { valor: 'Almacenaje', nombre: 'Almacenaje', modelado: false },
+    { valor: 'Inspeccion', nombre: 'Inspección', modelado: false },
+    { valor: 'SMS', nombre: 'SMS', modelado: false },
+    { valor: 'Factura 35 KM', nombre: 'Factura 35 KM', modelado: false },
+    { valor: 'Hoja de Ruta', nombre: 'Hoja de Ruta', modelado: false }
+  ]
+};
+
+// Catálogo ficticio compartido, no valores recuperados de producción.
+SILOG.nuevoCatalogoMultasCRE = () => [
+    { id: 2, sigla: 'MDR', nombre: 'Multa por día de retraso', valor: 50, moneda: 'Sus', base: 'cantidad', unidad: 'días' },
+    { id: 4, sigla: 'MNC', nombre: 'Multa por conductor no certificado', valor: 100, moneda: 'Sus', base: 'cantidad', unidad: 'conductores' },
+    { id: 5, sigla: 'MAC', nombre: 'Multa alcohol en conductor', valor: 500, moneda: 'Sus', base: 'fijo' },
+    { id: 6, sigla: 'MOP', nombre: 'Multa otros pasajeros', valor: 100, moneda: 'Sus', base: 'fijo' },
+    { id: 8, sigla: 'MNT', nombre: 'Multa por infringir normas de tránsito', valor: 100, moneda: 'Sus', base: 'fijo' },
+    { id: 9, sigla: 'MPF', nombre: 'Multa por filtración', valor: 4.22, moneda: 'Sus', base: 'filtracion' }
+];
+
 SILOG.crearEscenario = function () {
   const localidades = [
     { id: 1, codigo: 'RSCZ', codigoCRE: 'SC', nombre: 'Refinería Santa Cruz', tipo: 'Refinería', nacional: 0, area: 1, lon: -63.18, lat: -17.78 },
@@ -102,15 +128,7 @@ SILOG.crearEscenario = function () {
     { productoId: 2, vigInicio: '2026-01-01', vigFin: '2026-12-31', precio: 5200, moneda: 'BOB', tc: 6.96 }
   ];
 
-  // Tabla Multa (multas por incumplimiento por CRE de despacho). Valores ilustrativos.
-  const multasCatalogo = [
-    { id: 2, sigla: 'MDR', nombre: 'Multa por día de retraso', valor: 50, moneda: 'Sus', base: 'cantidad', unidad: 'días' },
-    { id: 4, sigla: 'MNC', nombre: 'Multa por conductor no certificado', valor: 100, moneda: 'Sus', base: 'cantidad', unidad: 'conductores' },
-    { id: 5, sigla: 'MAC', nombre: 'Multa alcohol en conductor', valor: 500, moneda: 'Sus', base: 'fijo' },
-    { id: 6, sigla: 'MOP', nombre: 'Multa otros pasajeros', valor: 100, moneda: 'Sus', base: 'fijo' },
-    { id: 8, sigla: 'MNT', nombre: 'Multa por infringir normas de tránsito', valor: 100, moneda: 'Sus', base: 'fijo' },
-    { id: 9, sigla: 'MPF', nombre: 'Multa por filtración', valor: 4.22, moneda: 'Sus', base: 'filtracion' }
-  ];
+  const multasCatalogo = SILOG.nuevoCatalogoMultasCRE();
 
   // MC_MultasDescuentos + Detalle + Empresas (recargos contractuales) y casos especiales.
   const recargosCatalogo = [

@@ -145,7 +145,9 @@ window.SILOG = window.SILOG || {};
 
   // ───────────────────────── cálculo por recepción (§3.2) ─────────────────────────
   M.calcularRecepcion = (st, rec, modo) => {
-    const despachos = M.despachosDe(st, rec.id).sort((a, b) => a.fecha.localeCompare(b.fecha) || a.id - b.id);
+    // AdmUtilitariosConciliacion.CREidsEntregasSinConciliar usa DISTINCT(CREIDEntrega).
+    // NumeroDeRecepciones, en cambio, cuenta/suma filas: conservar esa diferencia histórica.
+    const despachos = [...new Map(M.despachosDe(st, rec.id).map(d => [d.id, d])).values()].sort((a, b) => a.fecha.localeCompare(b.fecha) || a.id - b.id);
     const lineas = [];
     let sumaDesp = 0, admLote = 0;
     despachos.forEach((desp, m) => {
@@ -311,23 +313,31 @@ window.SILOG = window.SILOG || {};
     Object.values(productos).forEach(p => { p.mermas = p.mermasBrutas > 0 ? 0 : p.mermasBrutas; p.compensado = p.mermasBrutas > 0; });
 
     const r = conc.recargos || [];
-    const suma = tipo => M.redHU(r.filter(x => x.tipo === tipo).reduce((s, x) => s + Number(x.monto || 0), 0));
+    const suma = tipo => SILOG.multasContractuales && ['CCIST', 'MC', 'DC'].includes(tipo)
+      ? SILOG.multasContractuales.sumar(st, conc, tipo, modo)
+      : M.redHU(r.filter(x => x.tipo === tipo).reduce((s, x) => s + Number(x.monto || 0) * Number(x.cantidad == null ? 1 : x.cantidad), 0));
+    const multasCRE = M.redHU(Object.values(productos).reduce((s, p) => s + p.multasIn, 0));
     const cab = {
       flete: M.redHU(Object.values(productos).reduce((s, p) => s + p.flete, 0)),
       mermas: M.redHU(Object.values(productos).reduce((s, p) => s + p.mermas, 0)),
-      multasCRE: M.redHU(Object.values(productos).reduce((s, p) => s + p.multasIn, 0)),
-      multaTransporte: -suma('CCIST'),
+      multasCRE,
+      multaContractual: -suma('CCIST'),
+      // MC_ObtenerMultaDescuentoAplicado: CCIST + @MontoMultaAnterior (CRE distintos).
+      // multasCRE es un DESGLOSE de multaTransporte, nunca otro descuento adicional.
+      multaTransporte: M.redHU(-suma('CCIST') + multasCRE),
       multaConciliacion: -suma('MC'),
       descuentoConciliacion: -suma('DC'),
-      casosEspeciales: -suma('CASO'),
+      // SQL suma el monto firmado guardado. Los escenarios antiguos modelaban un
+      // importe positivo «a descontar»; el alias conserva su interpretación sin borrar datos.
+      casosEspeciales: M.redHU(r.filter(x => x.tipo === 'CASO').reduce((s, x) => s + Number(x.montoAlmacenado == null ? -x.monto : x.montoAlmacenado), 0)),
       carroGuia: -suma('CG')
     };
     if (modo === 'PROPUESTO') {
-      cab.neto = M.redHU(cab.flete + cab.mermas + cab.multasCRE + cab.multaTransporte + cab.multaConciliacion + cab.descuentoConciliacion + cab.casosEspeciales + cab.carroGuia);
-      cab.formula = 'Flete + mermas + multas por CRE + multa transporte + multa y descuento de conciliación + casos especiales + carro guía';
+      cab.neto = M.redHU(cab.flete + cab.mermas + cab.multaTransporte + cab.multaConciliacion + cab.descuentoConciliacion + cab.casosEspeciales + cab.carroGuia);
+      cab.formula = 'Flete + mermas + multa transporte (contractual + CRE, una sola vez) + MC + DC + casos firmados + carro guía. Propuesta didáctica; requiere aprobación funcional.';
     } else {
       cab.neto = M.redHU(cab.flete + cab.mermas + cab.multaTransporte);
-      cab.formula = 'Flete + mermas + multa transporte (CCIST). Multas por CRE, MC, DC, casos especiales y carro guía no entran al neto (D13).';
+      cab.formula = 'Flete + mermas + multa transporte (CCIST contractual + multas por CRE distintos). MC, DC, casos y carro guía no entran al neto persistido de cisterna, pero sí al total visual de Otros Transportes (D29).';
     }
     return { grupos, productos, cab };
   };
@@ -438,7 +448,7 @@ window.SILOG = window.SILOG || {};
     const desp = e.despachos.map(Number).filter(v => v > 0);
     const recs = e.recepciones.map(Number).filter(v => v > 0);
     if (!desp.length || !recs.length) return { error: 'Indique al menos un despacho y una recepción.' };
-    if (desp.length > 1 && recs.length > 1) return { error: 'V1 solo admite N despachos en una recepción o un despacho en N recepciones.' };
+    if (desp.length > 1 && recs.length > 1) return { error: 'Esta calculadora simple requiere N despachos → 1 recepción o 1 despacho → N recepciones. Para N×M se necesita la matriz de asociaciones: consulte «Crédito/débito paso a paso».' };
     const tarifa = (Number(e.tarifaM3) || 0) / 1000;
     const adm = Number(e.admisible) || 0;
     const precio = Number(e.precioMulta) || 0;
@@ -537,12 +547,30 @@ window.SILOG = window.SILOG || {};
     rechazar: (estado === 'En Aprobacion de Transportista' || estado === 'Aprobada Por Transportista') && !!p.PuedeRechazarConciliacion
   });
 
-  // Columna "Totales" (CargarColumnaTotales): conceptos no nulos de ObtenerMontosDeConciliacion y su suma.
+  // ObtenerTotalesConciliacion excluye TODA la recepción si alguna línea libera merma.
+  // La otra pantalla calcula por línea; conservar ambas variantes hace visible D28/D35.
+  M.otCabecera = (st, conc) => {
+    const d = M.recalcular(st, conc, 'V1'), porProducto = {};
+    d.grupos.forEach(g => {
+      const cd = g.lineas.some(l => l.liberarMerma) ? 0 : g.lineas.reduce((s, l) => s + l.cdBs, 0);
+      porProducto[g.productoId] = M.redHU((porProducto[g.productoId] || 0) + cd);
+    });
+    const k = Object.assign({}, d.cab);
+    k.mermas = M.redHU(Object.values(porProducto).reduce((s, cd) => s + Math.min(0, cd), 0));
+    k.neto = M.redHU(k.flete + k.mermas + k.multaTransporte);
+    return k;
+  };
+
+  // ObtenerMontosDeConciliacion lee flete y merma de CABECERA guardada; recargos en vivo.
+  // La UI VB omite conceptos si CInt(valor)=0 (no si valor=0).
   M.otTotales = (st, conc) => {
     const k = M.recalcular(st, conc, 'V1').cab;
-    const filas = [['Flete Facturable', k.flete], ['Multa Merma', k.mermas], ['Multa Transporte', k.multaTransporte], ['Multa Conc.', k.multaConciliacion],
-      ['Descuento Conc.', k.descuentoConciliacion], ['Carro Guía', k.carroGuia], ['Casos Especiales', k.casosEspeciales]].filter(f => f[1] !== 0);
-    return { filas, neto: M.redHU(filas.reduce((s, f) => s + f[1], 0)), netoGuardado: k.neto };
+    const guardado = conc.totales || {};
+    const conceptos = [['Flete Facturable', Number(guardado.flete || 0)], ['Multa Merma', Number(guardado.mermas || 0)], ['Multa Transporte', k.multaTransporte], ['Multa Conc.', k.multaConciliacion],
+      ['Descuento Conc.', k.descuentoConciliacion], ['Carro Guía', k.carroGuia], ['Casos Especiales', k.casosEspeciales]];
+    const filas = conceptos.filter(f => M.cintBancario(f[1]) !== 0);
+    return { filas, conceptos, omitidos: conceptos.filter(f => f[1] !== 0 && M.cintBancario(f[1]) === 0),
+      neto: M.redHU(filas.reduce((s, f) => s + f[1], 0)), netoGuardado: guardado.neto == null ? null : Number(guardado.neto), netoRecalculado: M.otCabecera(st, conc).neto };
   };
 
   // Recepciones para "Nuevo convoy" (ConciliacionOTDetalle): sin ventana de 90 días ni control de contrato.

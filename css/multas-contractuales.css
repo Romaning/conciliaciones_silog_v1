@@ -1,0 +1,33 @@
+/* Solo el recorrido contractual; reutiliza colores y tipografía del prototipo. */
+.mc-pasos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 12px 0; }
+.mc-pasos .btn { white-space: normal; justify-content: flex-start; text-align: left; }
+.mc-pasos [aria-current="step"] { border-color: var(--primario); background: var(--info-fondo); color: var(--primario); font-weight: 700; }
+.mc-form { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; }
+.mc-form label { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.mc-form label.inline { flex-direction: row; align-items: center; }
+.mc-form input, .mc-form select, .mc-form textarea { width: 100%; min-width: 0; }
+.mc-form input[type="checkbox"] { width: auto; }
+.mc-form textarea { min-height: 65px; resize: vertical; }
+.mc-form .mc-ancho { grid-column: 1 / -1; }
+.mc-acciones { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.mc-resumen { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.mc-resumen > div { padding: 12px; border: 1px solid var(--borde); border-radius: var(--radio); background: var(--superficie-2); }
+.mc-resumen strong { display: block; font-size: 18px; }
+.mc-historia { border-left: 2px solid var(--primario); padding-left: 18px; }
+.mc-historia li { margin: 10px 0; }
+.mc-tabla { min-width: 720px; }
+.mc-tabla input[type="number"] { width: 92px; }
+.mc-tabla td { overflow-wrap: anywhere; }
+.mc-tabla small { display: block; }
+.mc-excluido { color: var(--tenue); }
+.mc-permisos { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 8px; }
+.mc-permisos label { padding: 6px; border: 1px solid var(--borde); border-radius: 6px; }
+.mc-explicacion { margin: 8px 0; font-size: 13px; }
+.mc-lista { display: grid; gap: 8px; }
+.mc-lista label { display: flex; align-items: flex-start; gap: 8px; padding: 10px; border: 1px solid var(--borde); border-radius: var(--radio); }
+.mc-lista small { display: block; color: var(--tenue); }
+@media (min-width: 680px) {
+  .mc-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mc-resumen { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .mc-pasos { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}

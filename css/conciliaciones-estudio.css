@@ -1,0 +1,6 @@
+/* Evidencia y propuesta se distinguen por estructura, sin cambiar el tema existente. */
+.ce-comparacion { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.ce-comparacion article { border-inline-start: 3px solid var(--borde); padding: 0 14px; min-width: 0; }
+.ce-comparacion article:first-child { border-color: var(--primario); }
+.ce-comparacion h3 { margin-top: 0; }
+@media (max-width: 900px) { .ce-comparacion { grid-template-columns: minmax(0, 1fr); } }

@@ -1,0 +1,51 @@
+/* Solo paneles educativos: reutilizan colores y tipografía del prototipo. */
+.estudio { overflow-wrap: anywhere; }
+.estudio-resumen { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 16px 0; }
+.estudio-formula { border: 1px solid var(--borde); border-radius: var(--radio); margin: 7px 0; background: var(--superficie); }
+.estudio-formula > summary { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 14px; padding: 12px; cursor: pointer; }
+.estudio-formula > summary::before { content: '▸'; color: var(--primario); }
+.estudio-formula[open] > summary::before { content: '▾'; }
+.estudio-formula > summary > span { flex: 1; min-width: 160px; }
+.estudio-formula > summary small { font-weight: normal; color: var(--tenue); }
+.estudio-formula > ol { margin: 4px 16px 12px; padding-left: 22px; }
+.estudio-formula li { margin: 8px 0; }
+.estudio-fuente { padding: 0 12px; color: var(--tenue); font-size: 12px; }
+.estudio-bloque, .estudio-recepcion, .estudio-linea { padding: 12px; border: 1px solid var(--borde); border-radius: var(--radio); margin: 12px 0; }
+.estudio-bloque > summary, .estudio-recepcion > summary, .estudio-linea > summary { cursor: pointer; font-weight: 600; padding: 4px 0; }
+.estudio-detectado { background: var(--resaltado); }
+.estudio-problemas td { min-width: 155px; white-space: normal; vertical-align: top; }
+.estudio-problemas td:first-child { min-width: 95px; }
+.estudio summary:focus-visible { outline: 2px solid var(--primario); outline-offset: 3px; }
+@media (max-width: 950px) { .estudio-resumen { grid-template-columns: minmax(0, 1fr); } }
+
+.calculo-celda { display: inline-flex; align-items: center; gap: 5px; }
+.calculo-celda > template { display: none; }
+.calculo-boton { display: inline-flex; align-items: center; justify-content: center; flex: none; min-width: 24px; min-height: 24px; padding: 1px 3px; border: 1px solid var(--borde); border-radius: 4px; color: var(--primario); background: var(--superficie); cursor: pointer; font: inherit; line-height: 1; }
+.calculo-boton:hover, .calculo-boton[aria-expanded="true"] { background: var(--resaltado); border-color: var(--primario); }
+.calculo-boton:focus-visible { outline: 2px solid var(--primario); outline-offset: 2px; }
+.calculo-fila > td { padding: 10px !important; white-space: normal !important; text-align: left !important; background: var(--superficie); }
+.calculo-panel { position: sticky; left: 0; box-sizing: border-box; width: min(850px, calc(100vw - 72px)); max-width: 100%; padding: 12px; border-left: 3px solid var(--primario); overflow-wrap: anywhere; }
+.calculo-panel-cab { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.calculo-panel h3 { margin: 0; font-size: 15px; }
+.calculo-panel ol { padding-left: 24px; margin: 8px 0; }
+.calculo-panel li { margin: 7px 0; }
+.calculo-desglose + .calculo-desglose { border-top: 1px solid var(--borde); margin-top: 12px; padding-top: 8px; }
+.calculo-resultado { margin: 8px 0; }
+.calculo-panel .estudio-fuente { padding: 0; }
+
+/* Aislado al ejercicio; no cambia formularios ni grillas del recorrido operativo. */
+.estudio-medios__campos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 16px 0; }
+.estudio-medios__campos label { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.estudio-medios__campos input { width: 100%; min-width: 0; box-sizing: border-box; }
+.estudio-medios__campos small, .estudio-medios__totales small { font-weight: normal; color: var(--tenue); line-height: 1.5; }
+.estudio-medios__casos { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.estudio-medios__casilla { display: flex; align-items: center; gap: 8px; }
+.estudio-medios__totales { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 20px 0; }
+.estudio-medios__totales > div { display: flex; flex-direction: column; gap: 8px; padding: 16px; background: var(--superficie); border: 1px solid var(--borde); border-radius: var(--radio); }
+.estudio-medios__totales strong { font-size: 20px; }
+.estudio-medios table caption { text-align: left; color: var(--tenue); padding: 8px 0; }
+@media (max-width: 1100px) { .estudio-medios__campos { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 650px) {
+  .estudio-medios__campos, .estudio-medios__totales { grid-template-columns: minmax(0, 1fr); }
+  .estudio-medios__casos .btn { width: 100%; white-space: normal; text-align: left; }
+}

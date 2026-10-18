@@ -1,0 +1,19 @@
+/* Solo guía C/D: conserva los tokens y tipografía existentes. */
+.cd-estudio { overflow-wrap: anywhere; }
+.cd-camino { list-style: none; padding: 0; margin: 12px 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; counter-reset: cd-paso; }
+.cd-camino li { counter-increment: cd-paso; padding: 12px; background: var(--superficie-2); border-radius: var(--radio); }
+.cd-camino li::before { content: counter(cd-paso) '. '; color: var(--primario); font-weight: 600; }
+.cd-camino span { display: block; margin-top: 6px; color: var(--tenue); }
+.cd-documentos { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.cd-documentos > div { min-width: 0; }
+.cd-desglose { margin: 14px 0; }
+.cd-desglose > summary { cursor: pointer; font-weight: 600; padding: 8px 0; }
+.cd-desglose ol { padding-left: 24px; }
+.cd-desglose li { margin: 7px 0; }
+.cd-selector { display: block; max-width: 100%; }
+.cd-selector select { display: block; width: 100%; margin-top: 6px; }
+.cd-resumen { margin: 12px 0; padding: 12px; background: var(--info-fondo); border-radius: var(--radio); color: var(--texto); }
+.cd-resumen > summary { cursor: pointer; }
+.cd-estudio summary:focus-visible, .cd-resumen summary:focus-visible { outline: 2px solid var(--primario); outline-offset: 3px; }
+@media (max-width: 900px) { .cd-documentos { grid-template-columns: minmax(0, 1fr); } .cd-camino { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 480px) { .cd-camino { grid-template-columns: minmax(0, 1fr); } }

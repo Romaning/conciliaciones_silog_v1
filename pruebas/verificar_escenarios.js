@@ -47,7 +47,7 @@ check('0', 'Recepciones ocultas por V1', M.recepcionesSinConciliar(st(), 3, 'V1'
 generar(1, 3);
 check('0', 'N° 1001 neto flete', cab(1001).flete, 35569.65);
 check('0', 'N° 1001 mermas', cab(1001).mermas, -225.13);
-check('0', 'N° 1001 neto', cab(1001).neto, 35344.52);
+check('0', 'N° 1001 neto recalculado incluye multas CRE', cab(1001).neto, 34996.52);
 
 // ───────────── A ─────────────
 inicio('A');
@@ -207,11 +207,11 @@ const dF1 = st().cres.find(x => x.tipo === 3 && x.fecha === '2026-09-17'), dF2 =
 check('F', 'Multas CRE 17/09', M.totalMultasCRE(st(), dF1.id), 1392);
 check('F', 'MPF 19/09', M.totalMultasCRE(st(), dF2.id), 844.42);
 generar(1, 2);
-check('F', 'N° 1001 flete/mermas/neto/multas CRE', `${cab(1001).flete} ${cab(1001).mermas} ${cab(1001).neto} ${cab(1001).multasCRE}`, '9960 -320.93 9639.07 -2236.42');
+check('F', 'N° 1001 flete/mermas/neto/multas CRE', `${cab(1001).flete} ${cab(1001).mermas} ${cab(1001).neto} ${cab(1001).multasCRE}`, '9960 -320.93 7402.65 -2236.42');
 E.alternarRecargo(conc(1001).id, 1, dF1.id); E.alternarRecargo(conc(1001).id, 1, dF2.id); E.alternarRecargo(conc(1001).id, 2, null);
 E.agregarCaso(conc(1001).id, { tipo: 'CASO', casoId: 17, monto: 1500 }); E.agregarCaso(conc(1001).id, { tipo: 'CG', casoId: 17, monto: 300 });
-check('F', 'Recargos', `${cab(1001).multaTransporte} ${cab(1001).multaConciliacion} ${cab(1001).casosEspeciales} ${cab(1001).carroGuia}`, '-200 -500 -1500 -300');
-check('F', 'V1 neto con recargos', cab(1001).neto, 9439.07);
+check('F', 'Recargos con CRE consolidadas', `${cab(1001).multaTransporte} ${cab(1001).multaConciliacion} ${cab(1001).casosEspeciales} ${cab(1001).carroGuia}`, '-2436.42 -500 -1500 -300');
+check('F', 'V1 neto con recargos', cab(1001).neto, 7202.65);
 modo('PROPUESTO');
 check('F', 'Propuesto neto con recargos', cab(1001).neto, 4902.65);
 E.registrarMultasCRE(dF1.id, { 2: 2, 4: 1, 5: true }, 6.96);
@@ -304,18 +304,9 @@ check('I', 'Pendiente de Liberacion tras pagar', conc(981).estado, 'Pendiente de
 inicio('T');
 SILOG.estado.ui.visitadas = ['inicio'];
 check('T', 'Escenario de aprendizaje vacío', `${st().ordenes.length} ${st().cres.length} ${st().conciliaciones.length}`, '0 0 0');
-let pasoOk = true;
-SILOG.TOUR.forEach((p, i) => {
-  if (!p.hecho) return;
-  if (!p.hecho(st(), SILOG.app) && p.auto) p.auto();
-  if (!p.hecho(st(), SILOG.app)) { pasoOk = false; check('T', `Paso ${i + 1} (${p.titulo})`, 'no cumplido', 'cumplido'); }
-});
-check('T', 'Todos los pasos del recorrido se cumplen con "Hazlo por mí"', pasoOk, true);
-const cT = SILOG.TUTORIAL.conc(st());
-check('T', 'Conciliación del recorrido', `${cT.numero} ${cT.estado} ${cT.sap.texto} ${cT.sap.estado}`, '1001 Liberado CT 1001 9/26 Aceptado');
-check('T', 'Neto V1 del recorrido', M.recalcular(st(), cT, 'V1').cab.neto, 6479.30);
-check('T', 'Neto propuesto del recorrido', M.recalcular(st(), cT, 'PROPUESTO').cab.neto, 6131.30);
-check('T', 'Flete con tarifa alterna', M.recalcular(st(), cT, 'V1').cab.flete, 6723);
+// El motor general no monta los módulos conectados. La guía publicada completa se prueba
+// cargando index.html en verificar_tour_conectado.js, sin duplicar aquí otro recorrido T.
+check('T', 'El escenario no precarga viajes de otro simulador', SILOG.escenarioPorId('T').viajes.length, 0);
 
 // ───────────── O: Otros Transportes de principio a fin ─────────────
 inicio('O');
@@ -346,7 +337,7 @@ const cO = O.conc(st());
 const kO = M.recalcular(st(), cO, 'V1').cab;
 check('O', 'Conciliación final', `${cO.numero} ${cO.estado} ${cO.sap.texto} ${cO.sap.estado} ${cO.sap.pedido} ${cO.sap.hoja} ${cO.facturaMermas}`, '1001 Liberado CT 1001 9/26 Aceptado 4500001001 1000001001 F-1001-M');
 check('O', 'Flete final', kO.flete, 43785.37);
-check('O', 'Neto V1 final', kO.neto, 43426.12);
+check('O', 'Neto V1 final', kO.neto, 43078.12);
 check('O', 'Neto propuesto final', M.recalcular(st(), cO, 'PROPUESTO').cab.neto, 43078.12);
 check('O', 'Etapa final: pago y cierre', SILOG.otEtapaActual(st(), cO), 17);
 

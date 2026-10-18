@@ -208,10 +208,10 @@ window.SILOG = window.SILOG || {};
       guion: [
         { vista: 'multas', paso: 'Elija el CRE de despacho del 17/09/2026.', esperado: 'MDR 2 días = 696,00 y MNC 1 conductor = 696,00; total 1.392,00 (TC 6,96).' },
         { vista: 'multas', paso: 'Elija el CRE de despacho del 19/09/2026 (diésel, 25.000 L).', esperado: 'MPF = ((4,22 × 6,96) × 1,15 / 1000) × 25.000 = 844,42.' },
-        { vista: 'sinconciliar', paso: 'Área RCBA: marque Cóndor y Generar.', esperado: 'N° 1001: neto flete 9.960,00; mermas −320,93; neto 9.639,07. Las multas por CRE (−2.236,42) figuran como "Informativo".' },
-        { vista: 'recargos', paso: 'Aplique "Entrega tardía de documentación" a los dos despachos y "Incumplimiento del programa quincenal".', esperado: 'Multa transporte −200,00 y multa de conciliación −500,00.' },
+        { vista: 'sinconciliar', paso: 'Área RCBA: marque Cóndor y Generar.', esperado: 'N° 1001: flete 9.960,00; mermas −320,93; neto inicial guardado 9.639,07. Neto recalculado 7.402,65: incorpora las multas CRE −2.236,42 al procesar.' },
+        { vista: 'recargos', paso: 'Aplique "Entrega tardía de documentación" a los dos despachos y "Incumplimiento del programa quincenal".', esperado: 'Desglose contractual −200,00 + CRE −2.236,42 = Multa Transporte −2.436,42; MC −500,00.' },
         { vista: 'recargos', paso: 'Agregue un caso especial "Pérdida de producto por accidente" de 1500 y un carro guía de 300.', esperado: 'Casos especiales −1.500,00 y carro guía −300,00.' },
-        { vista: 'recargos', paso: 'Revise "Efecto en el neto" en modo V1.', esperado: 'Neto 9.439,07: solo la multa de transporte entra al neto.' },
+        { vista: 'recargos', paso: 'Revise "Efecto en el neto" en modo V1.', esperado: 'Neto recalculado 7.202,65 = 9.960,00 − 320,93 − 2.436,42. MC/casos/carro guía solo se suman al neto visual OT. Abra el panel para comparar con el guardado.' },
         { vista: 'recargos', paso: 'Active el modo propuesto.', esperado: 'Neto 4.902,65: entran todas las multas, recargos, casos y carro guía.' },
         { vista: 'multas', paso: 'En el CRE del 17/09 marque MAC y pulse Registrar.', esperado: 'Total 4.872,00. En modo propuesto el neto baja a 1.422,65.' },
         { vista: 'conciliaciones', paso: 'Solicite la aprobación del transportista e intente registrar de nuevo las multas del 17/09.', esperado: 'Bloqueo: la conciliación N° 1001 está "En Aprobacion de Transportista".' }

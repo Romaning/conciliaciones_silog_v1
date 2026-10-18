@@ -15,6 +15,8 @@ window.SILOG = window.SILOG || {};
   const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   V.esc = esc;
   const N = M.fmtN, B = M.fmtB, F = M.fmtF;
+  // La ayuda se inserta junto al valor y se abre debajo de su fila, no al final de la página.
+  const cc = (valorHtml, dato) => V.celdaCalculo(valorHtml, dato);
   const opts = (lista, sel, val = x => x.id, txt = x => x.nombre, vacio) =>
     (vacio ? `<option value="">${esc(vacio)}</option>` : '') +
     lista.map(x => `<option value="${esc(val(x))}" ${String(val(x)) === String(sel) ? 'selected' : ''}>${esc(txt(x))}</option>`).join('');
@@ -118,7 +120,7 @@ window.SILOG = window.SILOG || {};
     ['RN-AJU-02', 'Liberar merma', 'La línea no aporta su C/D; en contabilización se excluye la recepción entera.', 'C', 'ConciliacionCisterna.ascx.vb:1379-1394; ObtenerTotalesConciliacion', 'conciliaciones'],
     ['RN-TOT-01', 'Totales por recepción', 'Flete, mermas no liberadas, multas por CRE y neto.', 'C', 'ConciliacionCisterna.ascx.vb:1027-1059', 'conciliaciones'],
     ['RN-TOT-02', 'Compensación por producto', 'Si la suma de mermas de un producto es positiva, se toma 0: la demasía compensa pero no se paga.', 'C', 'ConciliacionCisterna.ascx.vb:1119-1140', 'conciliaciones'],
-    ['RN-TOT-03', 'Neto de cabecera', 'Flete + mermas + multa transporte (recargo CCIST).', 'C', 'ConciliacionCisterna.ascx.vb:1061-1089; ObtenerMontosDeConciliacion (66652)', 'conciliaciones'],
+    ['RN-TOT-03', 'Neto de cabecera', 'Flete + mermas + multa transporte (CCIST contractual + multas CRE).', 'C', 'ConciliacionCisterna.ascx.vb:1061-1089; ObtenerMontosDeConciliacion (66652)', 'conciliaciones'],
     ['RN-TOT-04', 'Umbral de facturas', 'Mermas o multas > 50.000 dejan la conciliación con factura impaga.', 'C', 'ConciliacionCisterna.ascx.vb:1174-1176', 'sap'],
     ['RN-EST-00', 'Acciones ofrecidas', 'La lista solo ofrece Solicitar Aprob. Transportista, Transportista Aprueba/Rechaza y Rechazar, según actividades; las demás están comentadas.', 'C', 'ConciliacionCisterna.ascx.vb:151-166', 'conciliaciones'],
     ['RN-EST-01', 'Edición', 'Solo En Elaboracion; con aprobación del transportista solo facturas.', 'C', 'ConciliacionCisterna.ascx.vb:1163-1284', 'conciliaciones'],
@@ -142,7 +144,7 @@ window.SILOG = window.SILOG || {};
     ['D10', 'Prorrateo con redondeo bancario sin ajuste.', 'Resto mayor.', 'Ejemplos (prorrateo)'],
     ['D11', 'Redondeo manipulando cadenas.', 'Aritmética decimal con política única.', 'motor.js'],
     ['D12', 'Total de línea desactualizado si C/D ≥ 0.', 'Recalcular siempre.', 'Conciliación: marca "desactualizado"'],
-    ['D13', 'Dos mecanismos de multas; solo uno en el neto.', 'Recargos tipificados que entran al neto.', 'Recargos y totales'],
+    ['D13', 'Multas CRE y contractuales se consolidan en Multa Transporte; riesgo de confundir subtotales o registrar dos veces un incidente.', 'Identificar incidentes y mostrar desglose sin doble descuento.', 'Recargos y totales; MC_ObtenerMultaDescuentoAplicado'],
     ['D14', 'Errores silenciados.', 'Errores visibles y registrados.', 'Mensajes del prototipo'],
     ['D15', 'ID por MAX(ID).', 'Identidad devuelta por la inserción.', 'Diseño LEGACY'],
     ['D16', '@Moneda nula para barcaza y vagón.', 'Moneda desde el contrato en todos los tipos.', 'Diseño LEGACY'],
@@ -389,15 +391,18 @@ window.SILOG = window.SILOG || {};
     const entrada = id => { if (v.entradas && v.entradas[id] !== undefined && v.creId === d.id) return v.entradas[id]; const r = reg.find(m => m.multaId === id); return r ? r.entrada : ''; };
     const tc = v.tc || s.tc;
     let total = 0;
+    const desgloses = [];
     const filas = s.multasCatalogo.map(m => {
       const e = entrada(m.id);
       const t = M.calcularMultaCRE(m, m.base === 'fijo' ? !!e : m.base === 'filtracion' ? (e ? (e === true ? m.valor : e) : 0) : e, Number(tc), d.volumen);
       total += t;
+      const calculo = SILOG.auditoria.multaPrevia(m, m.base === 'fijo' ? !!e : m.base === 'filtracion' ? (e ? (e === true ? m.valor : e) : 0) : e, Number(tc), d.volumen, t);
+      desgloses.push(calculo);
       const campo = m.base === 'cantidad'
         ? `<input type="number" min="0" data-multa="${m.id}" value="${esc(e)}" aria-label="${esc(m.unidad)}"> ${esc(m.unidad)}`
         : m.base === 'fijo' ? `<input type="checkbox" data-multa="${m.id}" ${e ? 'checked' : ''} aria-label="Aplicar">`
           : `<input type="checkbox" data-multa="${m.id}" ${e ? 'checked' : ''} aria-label="Aplicar"> MPF ${m.valor} Sus/m³`;
-      return `<tr><td><strong>${m.sigla}</strong> · ${esc(m.nombre)}</td><td class="num">${m.valor}</td><td>${m.moneda}</td><td>${campo}</td><td class="num">${B(t)}</td></tr>`;
+      return `<tr><td><strong>${m.sigla}</strong> · ${esc(m.nombre)}</td><td class="num">${m.valor}</td><td>${m.moneda}</td><td>${campo}</td><td class="num">${cc(B(t), calculo)}</td></tr>`;
     }).join('');
     const conc = s.conciliaciones.find(c => c.lineas.some(l => l.despachoId === d.id));
     return `${cabecera('Multas por incumplimiento por CRE', 'Se registran sobre el CRE de despacho y se muestran en la primera línea de ese despacho en la conciliación.', '<code>MultasPorInclumpliento.aspx</code>, tablas <code>Multa</code> y <code>MultaPorIncumplimiento</code>')}
@@ -406,9 +411,9 @@ window.SILOG = window.SILOG || {};
       <label>Tipo de cambio<input type="number" step="0.01" data-cambio="mul.tc" value="${esc(tc)}"></label></div>
       <p class="ayuda">Volumen entregado: ${N(d.volumen)} L. ${conc ? `Conciliación N° ${conc.numero}: ${badge(conc.estado)}` : 'Aún no conciliado.'}</p>
       <table class="tabla"><thead><tr><th>Multa</th><th class="num">Valor</th><th>Moneda</th><th>Cantidad / aplica</th><th class="num">Total Bs</th></tr></thead><tbody>${filas}
-      <tr class="total"><td colspan="4">Total multas</td><td class="num">${B(total)}</td></tr></tbody></table>
+      <tr class="total"><td colspan="4">Total multas</td><td class="num">${cc(B(total), { titulo: 'Total de multas calculado en pantalla', valor: total, unidad: 'Bs', pasos: [`${desgloses.map(x => B(x.valor)).join(' + ')} = ${B(total)} Bs.`, 'Suma de los cálculos previos visibles; no sustituye las multas guardadas hasta Registrar.'], fuente: 'motor.calcularMultaCRE; MultasPorInclumpliento:179-238' })}</td></tr></tbody></table>
       <div class="acciones"><button class="btn primario" data-accion="registrarMultas" data-ayuda="mulRegistrar" data-id="${d.id}">Registrar</button></div>
-      ${modoNota('El tipo de cambio de la pantalla original viene fijo en 7,07; aquí se usa el del escenario (6,96). Valores de multas ilustrativos. Existe un segundo mecanismo de multas contractuales (Recargos); solo ese entra al neto de la conciliación.', 'Las multas por CRE y las contractuales se tratan como recargos tipificados y todas entran al neto.')}
+      ${modoNota('El tipo de cambio de la pantalla original viene fijo en 7,07; aquí se usa el del escenario (6,96). Valores ilustrativos. El SQL incorpora las multas CRE dentro de Multa Transporte junto con los recargos CCIST al procesar; no son solo informativas.', 'Multas CRE y contractuales se desglosan sin descontar dos veces el mismo subtotal.')}
     </section>`;
   };
 
@@ -416,12 +421,12 @@ window.SILOG = window.SILOG || {};
   const COLS_V1 = [['Lote', 'lote'], ['Placa', 'placa'], ['Plan de viaje', 'planViaje'], ['Carga', 'fechaCarga'], ['Despacho', 'fechaDespacho'], ['En destino', 'fechaEnDestino'], ['Descarga', 'fechaDescarga'],
     ['Origen', 'origen'], ['Destino', 'destino'], ['Vol. desp.', 'volDesp'], ['Vol. recep.', 'volRec'], ['CRE desp.', 'creDesp'], ['CRE rec.', 'creRec'], ['Tarifa Bs/L', 'tarifa'], ['Fuente tarifa', 'fuenteTarifa'],
     ['Total flete', 'totalFlete'], ['Adm. %', 'admPorc'], ['Adm. L', 'admLts'], ['Bal. lote L', 'balanceLote'], ['Adm. lote L', 'admLote'], ['C/D L', 'cdLts'], ['P.U.', 'pu'], ['Precio multa', 'precioMulta'], ['C/D Bs', 'cdBs'], ['Total a facturar', 'totalFacturar']];
-  const filaLineaBase = l => `<tr>
+  const filaLineaBase = (l, g) => { const datos = Object.fromEntries(SILOG.auditoria.linea(st(), Object.assign({}, l, { ajuste: {}, baseFlete: l.ultima ? l.volRec : 0, tarifaAplicada: l.tarifa, liberarMerma: false, multasIn: 0 }), g).map(x => [x.clave, x])); return `<tr>
     <td class="mono">${esc(l.lote)}</td><td>${esc(l.placa)}</td><td class="mono">${esc(l.planViaje)}</td><td>${F(l.fechaCarga)}</td><td>${F(l.fechaDespacho)}</td><td>${F(l.fechaEnDestino)}</td><td>${F(l.fechaDescarga)}</td>
-    <td>${esc(loc(l.origenId).codigo)}</td><td>${esc(loc(l.destinoId).codigo)}</td><td class="num">${N(l.volDesp)}</td><td class="num">${N(l.volRec)}</td><td>${esc(l.creDespacho)}</td><td>${esc(l.creRecepcion)}</td>
-    <td class="num">${l.tarifa.toFixed(5)}</td><td><span class="tag ${l.tarifaFuente === 'SIN TARIFA' ? 'error' : l.tarifaFuente === 'ADJUDICADA' ? 'prop' : ''}">${esc(l.tarifaFuente)}</span></td><td class="num">${B(l.totalFlete)}</td>
-    <td class="num">${l.admPorc}</td><td class="num">${N(l.admLts)}</td><td class="num">${N(l.balanceLote)}</td><td class="num">${N(l.admLote)}</td><td class="num">${N(l.cdLts)}</td><td class="num">${l.ppt}</td><td class="num">${l.precioMulta}</td><td class="num">${neg(l.cdBs)}</td><td class="num"><strong>${B(l.totalFacturar)}</strong></td></tr>
-    <tr class="fila-traza"><td colspan="${COLS_V1.length}">${traza(l.traza)}</td></tr>`;
+    <td>${esc(loc(l.origenId).codigo)}</td><td>${esc(loc(l.destinoId).codigo)}</td><td class="num">${cc(N(l.volDesp), datos.volDesp)}</td><td class="num">${cc(N(l.volRec), datos.volRec)}</td><td>${esc(l.creDespacho)}</td><td>${esc(l.creRecepcion)}</td>
+    <td class="num">${cc(l.tarifa.toFixed(5), datos.tarifa)}</td><td><span class="tag ${l.tarifaFuente === 'SIN TARIFA' ? 'error' : l.tarifaFuente === 'ADJUDICADA' ? 'prop' : ''}">${esc(l.tarifaFuente)}</span></td><td class="num">${cc(B(l.totalFlete), datos.flete)}</td>
+    <td class="num">${l.admPorc}</td><td class="num">${cc(N(l.admLts), datos.admisible)}</td><td class="num">${cc(N(l.balanceLote), datos.balance)}</td><td class="num">${N(l.admLote)}</td><td class="num">${cc(N(l.cdLts), datos.cdLts)}</td><td class="num">${l.ppt}</td><td class="num">${cc(l.precioMulta, datos.precio)}</td><td class="num">${cc(neg(l.cdBs), datos.cdBs)}</td><td class="num">${cc(`<strong>${B(l.totalFacturar)}</strong>`, datos.totalLinea)}</td></tr>
+    <tr class="fila-traza"><td colspan="${COLS_V1.length}">${traza(l.traza)}</td></tr>`; };
 
   V.sinconciliar = () => {
     const s = st(), v = vs().sc;
@@ -440,10 +445,11 @@ window.SILOG = window.SILOG || {};
           <label class="inline">Moneda <select data-ayuda="scMoneda" data-moneda="${esc(g.clave)}">${g.contrato ? `<option ${sel.moneda === g.contrato.moneda ? 'selected' : ''}>${g.contrato.moneda}</option>` : '<option value="">(sin moneda)</option>'}</select></label>
           <span class="tenue">Contrato ${g.contrato ? esc(g.contrato.numero) + (g.contrato.marco ? ' · marco ' + esc(g.contrato.marco.numero) : '') : '—'}</span></div>
         ${g.alertas.map(a => nota(esc(a), 'aviso')).join('')}
+        ${SILOG.auditoria.presupuesto(s, g).length ? `<details class="traza"><summary>Presupuesto del grupo · ver importes y cálculos</summary><table class="tabla"><tbody>${SILOG.auditoria.presupuesto(s, g).map(x => `<tr><td>${esc(x.titulo)}</td><td class="num">${cc(B(x.valor), x)}</td></tr>`).join('')}</tbody></table></details>` : ''}
         ${g.recepciones.map(r => { const tot = r.lineas.reduce((a, l) => ({ flete: a.flete + l.totalFlete, cd: a.cd + l.cdBs, total: a.total + l.totalFacturar }), { flete: 0, cd: 0, total: 0 });
           return `<div class="recepcion"><div class="cab-rec"><label class="inline"><input type="checkbox" data-ayuda="scRecepcion" data-rec="${esc(g.clave)}" value="${r.recepcion.id}" ${sel.recepciones.includes(r.recepcion.id) ? 'checked' : ''}> CRE recepción <strong>${esc(r.recepcion.numero)}</strong></label>
             <span>${esc(prod(r.recepcion.productoId).nombre)}</span><span>${F(r.recepcion.fecha)}</span><span>Despachos ${N(r.sumaDesp)} L</span><span>Recepción ${N(r.recepcion.volumen)} L</span><span>Balance ${N(r.recepcion.volumen - r.sumaDesp)} L</span><span>Total ${B(tot.total)}</span></div>
-            <div class="tabla-scroll"><table class="tabla densa"><thead><tr>${COLS_V1.map(c => th(c[0], c[1])).join('')}</tr></thead><tbody>${r.lineas.map(filaLineaBase).join('')}</tbody></table></div></div>`; }).join('')}
+            <div class="tabla-scroll"><table class="tabla densa"><thead><tr>${COLS_V1.map(c => th(c[0], c[1])).join('')}</tr></thead><tbody>${r.lineas.map(l => filaLineaBase(l, { recepcion: r.recepcion, lineas: r.lineas, tot: { despachos: r.sumaDesp } })).join('')}</tbody></table></div></div>`; }).join('')}
       </section>`; }).join('') : nota('No hay recepciones pendientes de conciliar en esta área.')}
     ${ocultas.length ? `<section class="tarjeta"><h2>Recepciones que V1 no muestra</h2><table class="tabla"><thead><tr><th>CRE</th><th>Fecha</th><th>Transportista</th><th class="num">Volumen</th><th>Motivo</th></tr></thead><tbody>
       ${ocultas.map(o => `<tr><td>${esc(o.rec.numero)}</td><td>${F(o.rec.fecha)}</td><td>${esc(trans(M.transportistaDeCRE(s, o.rec)).nombre)}</td><td class="num">${N(o.rec.volumen)}</td><td>${o.motivos.map(esc).join('; ')}</td></tr>`).join('')}
@@ -458,42 +464,87 @@ window.SILOG = window.SILOG || {};
     <div class="filtros"><label>Estado<select data-cambio="conc.estado"><option value="">Todos</option>${M.ESTADOS.map(e => `<option ${e === v.estado ? 'selected' : ''}>${e}</option>`).join('')}</select></label>
       <label>Transportista<select data-cambio="conc.transportistaId">${opts(s.transportistas, v.transportistaId, x => x.id, x => x.nombre, 'Todos')}</select></label></div>
     <section class="tarjeta"><table class="tabla seleccionable"><thead><tr>${th('N°', 'numero')}<th>Transportista</th><th>Área</th><th>Periodo</th>${th('Estado', 'estado')}${th('Neto flete', 'netoFlete', 'num')}${th('Mermas', 'mermas', 'num')}${th('Multa transp.', 'multaTransp', 'num')}${th('Neto conciliado', 'neto', 'num')}${th('Moneda', 'moneda')}${th('SAP', 'sap')}</tr></thead><tbody>
-    ${lista.map(x => { const d = M.recalcular(s, x, modo()); return `<tr class="${c && c.id === x.id ? 'activa' : ''}" data-accion="verConc" data-ayuda="concFila" data-id="${x.id}" tabindex="0"><td>${x.numero}</td><td>${esc(trans(x.transportistaId).nombre)}</td><td>${AREAS[x.area]}</td><td>${periodoTxt(x)}</td><td>${badge(x.estado)}</td><td class="num">${B(d.cab.flete)}</td><td class="num">${neg(d.cab.mermas)}</td><td class="num">${neg(d.cab.multaTransporte)}</td><td class="num"><strong>${B(d.cab.neto)}</strong></td><td>${x.moneda}</td><td>${x.sap ? esc(x.sap.estado) : '—'}</td></tr>`; }).join('') || '<tr><td colspan="11" class="tenue">No hay conciliaciones con estos filtros. Genérelas en "Detalle sin conciliar".</td></tr>'}
+    ${lista.map(x => { const informe = SILOG.auditoria.conciliacion(s, x, modo()), d = informe.d, datos = Object.fromEntries(informe.rows.map(x => [x.clave, x])); return `<tr class="${c && c.id === x.id ? 'activa' : ''}" data-accion="verConc" data-ayuda="concFila" data-id="${x.id}" tabindex="0"><td>${x.numero}</td><td>${esc(trans(x.transportistaId).nombre)}</td><td>${AREAS[x.area]}</td><td>${periodoTxt(x)}</td><td>${badge(x.estado)}</td><td class="num">${cc(B(d.cab.flete), datos.flete)}</td><td class="num">${cc(neg(d.cab.mermas), datos.mermas)}</td><td class="num">${cc(neg(d.cab.multaTransporte), datos.multaTransporte)}</td><td class="num">${cc(`<strong>${B(d.cab.neto)}</strong>`, datos.netoCisterna)}</td><td>${x.moneda}</td><td>${x.sap ? esc(x.sap.estado) : '—'}</td></tr>`; }).join('') || '<tr><td colspan="11" class="tenue">No hay conciliaciones con estos filtros. Genérelas en "Detalle sin conciliar".</td></tr>'}
     </tbody></table></section>
     ${c ? V.detalleConciliacion(c) : nota('Seleccione una conciliación para ver su detalle.')}`;
   };
 
+  V.generales = () => {
+    const s = st(), v = vs().generales;
+    const catalogo = (SILOG.CATALOGOS_V1 || {}).tiposConciliacion || [];
+    const tipo = v.tipo || 'Cisterna';
+    const tipos = catalogo.length ? catalogo : [{ valor: 'Cisterna', nombre: 'Cisterna', modelado: true }];
+    const estados = ['', ...M.ESTADOS, 'Factura Recepcionada'];
+    const lista = tipo !== 'Cisterna' && tipo !== 'Todos' ? [] : s.conciliaciones
+      .filter(c => (!v.estado || c.estado === v.estado) && (!v.mes || Number(c.mes) === Number(v.mes)) && (!v.anio || Number(c.anio) === Number(v.anio)))
+      .sort((a, b) => b.numero - a.numero);
+    const responsable = c => {
+      const h = c.historial || [];
+      const buscar = texto => {
+        const x = [...h].reverse().find(y => String(y.accion || '').toLowerCase().includes(texto));
+        return x ? `${x.usuario} · ${F(x.fecha)}` : '—';
+      };
+      return {
+        elaborada: buscar('generada'),
+        aprobadaTrans: buscar('aprobada por transportista'),
+        rechazada: buscar('rechaz'),
+        aprobada: buscar('pendiente de aprobacion'),
+        liberada: buscar('liberado')
+      };
+    };
+    const años = [...new Set(s.conciliaciones.map(c => Number(c.anio)))].sort((a, b) => a - b);
+    const meses = Object.keys(M.MESES).map(Number).filter(x => x > 0);
+    const aviso = tipo !== 'Cisterna' && tipo !== 'Todos'
+      ? nota(`SILOG_V1 contempla el tipo <strong>${esc(tipo)}</strong> en el filtro de <code>ConciliacionesGenerales</code>, pero este prototipo solo contiene datos simulados de <strong>Cisterna</strong>. La lista queda vacía para no inventar información.`, 'aviso')
+      : '';
+    const filas = lista.map(c => {
+      const informe = SILOG.auditoria.conciliacion(s, c, modo()), d = informe.d, r = responsable(c);
+      return `<tr><td>${esc(c.tipo || 'Cisterna')}</td><td class="mono">${c.numero}</td><td>${esc(trans(c.transportistaId).nombre)}</td><td>${AREAS[c.area]}</td><td>${periodoTxt(c)}</td><td>${badge(c.estado)}</td><td class="num">${cc(`<strong>${B(d.cab.neto)}</strong> ${esc(c.moneda)}`, informe.rows.find(x => x.clave === 'netoCisterna'))}</td>
+        <td class="detalle-responsables"><span><strong>Elaboró:</strong> ${esc(r.elaborada)}</span><span><strong>Aprob. transp.:</strong> ${esc(r.aprobadaTrans)}</span><span><strong>Aprob. LOG:</strong> ${esc(r.aprobada)}</span>${r.rechazada !== '—' ? `<span class="rechazo"><strong>Rechazo:</strong> ${esc(r.rechazada)}</span>` : ''}<span><strong>Liberó:</strong> ${esc(r.liberada)}</span></td>
+        <td><button class="btn chico" data-accion="verConc" data-id="${c.id}" data-ir="conciliaciones">Ver detalle</button></td></tr>`;
+    }).join('');
+    return `${cabecera('Conciliaciones generadas', 'Listado transversal para localizar una conciliación por tipo, periodo y estado, con responsables y fechas de la traza.', '<code>ConciliacionesGenerales.aspx</code> · <code>ConciliacionesGenerales.ascx.vb</code>')}
+      ${nota('La pantalla replica el propósito de V1: consultar conciliaciones ya generadas. El botón de detalle reutiliza la vista de conciliación cisterna y no duplica la lógica de cálculo.', 'info')}
+      <div class="filtros"><label>Tipo de conciliación<select data-cambio="generales.tipo">${tipos.map(x => `<option value="${esc(x.valor)}" ${x.valor === tipo ? 'selected' : ''}>${esc(x.nombre)}${x.modelado ? '' : ' · sin datos simulados'}</option>`).join('')}</select></label>
+        <label>Mes<select data-cambio="generales.mes"><option value="">Todos</option>${meses.map(m => `<option value="${m}" ${Number(v.mes) === m ? 'selected' : ''}>${esc(M.MESES[m])}</option>`).join('')}</select></label>
+        <label>Año<select data-cambio="generales.anio"><option value="">Todos</option>${años.map(a => `<option value="${a}" ${Number(v.anio) === a ? 'selected' : ''}>${a}</option>`).join('')}</select></label>
+        <label>Estado<select data-cambio="generales.estado">${estados.map(e => `<option value="${esc(e)}" ${e === v.estado ? 'selected' : ''}>${esc(e || 'Todos')}</option>`).join('')}</select></label></div>
+      ${aviso}<section class="tarjeta"><div class="tabla-scroll"><table class="tabla densa"><thead><tr><th>Tipo</th>${th('N°', 'numero')}${th('Transportista', 'transportista')}${th('Área', 'area')}<th>Periodo</th>${th('Estado', 'estado')}${th('Neto conciliado', 'neto', 'num')}<th>Responsables y traza</th><th>Acción</th></tr></thead><tbody>${filas || `<tr><td colspan="9" class="tenue">No hay conciliaciones generadas con estos filtros.</td></tr>`}</tbody></table></div></section>`;
+  };
+
   V.detalleConciliacion = (c, soloLectura) => {
     const s = st();
-    const d = M.recalcular(s, c, modo());
+    const informe = SILOG.auditoria.conciliacion(s, c, modo());
+    const d = informe.d, conceptos = Object.fromEntries(informe.rows.map(x => [x.clave, x]));
     const editable = !soloLectura && c.estado === 'En Elaboracion';
     const k = d.cab;
-    const filaTot = (txt, val, entra) => `<tr class="${entra ? '' : 'fuera'}"><td>${txt}</td><td class="num">${neg(val)}</td><td>${entra ? 'Entra al neto' : 'Informativo'}</td></tr>`;
+    const filaTot = (txt, clave, entra, texto) => `<tr class="${entra ? '' : 'fuera'}"><td>${txt}</td><td class="num">${cc(neg(k[clave]), conceptos[clave])}</td><td>${texto || (entra ? 'Entra al neto recalculado' : 'Solo total visual OT; no neto persistido V1')}</td></tr>`;
     const totales = `<table class="tabla"><tbody>
-      ${filaTot('Neto flete facturable', k.flete, true)}
-      ${filaTot('Total multa mermas (compensadas por producto)', k.mermas, true)}
-      ${filaTot('Multa transporte (recargo CCIST)', k.multaTransporte, true)}
-      ${filaTot('Multas por CRE (MultaPorIncumplimiento)', k.multasCRE, modo() === 'PROPUESTO')}
-      ${filaTot('Multa de conciliación (MC)', k.multaConciliacion, modo() === 'PROPUESTO')}
-      ${filaTot('Descuento de conciliación (DC)', k.descuentoConciliacion, modo() === 'PROPUESTO')}
-      ${filaTot('Casos especiales', k.casosEspeciales, modo() === 'PROPUESTO')}
-      ${filaTot('Carro guía', k.carroGuia, modo() === 'PROPUESTO')}
-      <tr class="total"><td>Neto conciliado (${c.moneda})</td><td class="num">${B(k.neto)}</td><td></td></tr></tbody></table>
+      ${filaTot('Neto flete facturable', 'flete', true)}
+      ${filaTot('Total multa mermas (compensadas por producto)', 'mermas', true)}
+      ${filaTot('Multa Transporte consolidada (CCIST + CRE)', 'multaTransporte', true)}
+      ${filaTot('Desglose: multas contractuales CCIST', 'multaContractual', false, 'Ya incluidas arriba; no sumar otra vez')}
+      ${filaTot('Desglose: multas CRE (MultaPorIncumplimiento)', 'multasCRE', false, 'Ya incluidas arriba; no sumar otra vez')}
+      ${filaTot('Multa de conciliación (MC)', 'multaConciliacion', modo() === 'PROPUESTO')}
+      ${filaTot('Descuento de conciliación (DC)', 'descuentoConciliacion', modo() === 'PROPUESTO')}
+      ${filaTot('Casos especiales', 'casosEspeciales', modo() === 'PROPUESTO')}
+      ${filaTot('Carro guía', 'carroGuia', modo() === 'PROPUESTO')}
+      <tr class="total"><td>Neto recalculado en esta pantalla (${c.moneda})</td><td class="num">${cc(B(k.neto), conceptos.netoCisterna)}</td><td>No implica ya guardado</td></tr></tbody></table>
       <p class="ayuda">${esc(k.formula)}</p>`;
     const productos = `<table class="tabla"><thead><tr><th>Producto</th><th class="num">Flete</th><th class="num">Mermas brutas</th><th class="num">Mermas aplicadas</th><th class="num">Volumen</th></tr></thead><tbody>
-      ${Object.values(d.productos).map(p => `<tr><td>${esc(prod(p.productoId).nombre)}</td><td class="num">${B(p.flete)}</td><td class="num">${neg(p.mermasBrutas)}</td><td class="num">${neg(p.mermas)}${p.compensado ? ' <span class="tag">demasía compensada → 0</span>' : ''}</td><td class="num">${N(p.volumen)}</td></tr>`).join('')}</tbody></table>`;
+      ${Object.values(d.productos).map(p => { const datos = Object.fromEntries(SILOG.auditoria.producto(s, c, p, d.grupos).map(x => [x.clave, x])); return `<tr><td>${esc(prod(p.productoId).nombre)}</td><td class="num">${cc(B(p.flete), datos.flete)}</td><td class="num">${cc(neg(p.mermasBrutas), datos.mermasBrutas)}</td><td class="num">${cc(neg(p.mermas), datos.mermas)}${p.compensado ? ' <span class="tag">demasía compensada → 0</span>' : ''}</td><td class="num">${cc(N(p.volumen), datos.volumen)}</td></tr>`; }).join('')}</tbody></table>`;
     const grupos = d.grupos.map(g => `<div class="recepcion"><div class="cab-rec"><span>CRE recepción <strong>${esc(g.recepcion.numero)}</strong></span><span>${esc(prod(g.productoId).nombre)}</span><span>Despachos ${N(g.tot.despachos)} L</span><span>Recepciones ${N(g.tot.recepciones)} L</span><span>Flete ${B(g.tot.flete)}</span><span>Mermas ${neg(g.tot.mermas)}</span><span>Multas CRE ${neg(g.tot.multasIn)}</span><span>Neto ${B(g.tot.neto)}</span></div>
       <div class="tabla-scroll"><table class="tabla densa"><thead><tr>${th('Lote', 'lote')}${th('Placa', 'placa')}${th('CRE desp.', 'creDesp')}${th('Origen → destino', 'origen')}${th('Vol. desp.', 'volDesp', 'num')}${th('Vol. recep.', 'volRec', 'num')}${th('Tarifa', 'tarifa', 'num')}${th('Fuente', 'fuenteTarifa')}${th('Adm. L', 'admLts', 'num')}${th('Bal. lote', 'balanceLote', 'num')}${th('C/D L', 'cdLts', 'num')}${th('Precio multa', 'precioMulta', 'num')}${th('C/D Bs', 'cdBs', 'num')}${th('Multas CRE', 'multasCRE', 'num')}${th('Total flete', 'totalFlete', 'num')}${th('Total a facturar', 'totalFacturar', 'num')}${th('Liberar capacidad', 'liberarCapacidad')}${th('Tarifa especial', 'tarifaEspecial')}${th('Liberar merma', 'liberarMerma')}${th('Observación', 'observacion')}${editable ? '<th>Cambiar tarifa</th>' : ''}${c.disputas && Object.keys(c.disputas).length ? '<th>Disputa</th>' : ''}</tr></thead><tbody>
-      ${g.lineas.map(l => `<tr class="${l.desactualizado ? 'desactualizada' : ''}"><td class="mono">${esc(l.lote)}</td><td>${esc(l.placa)}</td><td>${esc(l.creDespacho)}</td><td>${esc(loc(l.origenId).codigo)} → ${esc(loc(l.destinoId).codigo)}</td><td class="num">${N(l.volDesp)}</td><td class="num">${N(l.volRec)}</td>
-        <td class="num">${l.tarifaAplicada.toFixed(5)}</td><td><span class="tag ${l.tarifaFuente === 'SIN TARIFA' ? 'error' : l.tarifaFuente === 'ADJUDICADA' ? 'prop' : ''}">${esc(l.ajuste.tarifaEspecial ? 'ESPECIAL' : l.tarifaFuente)}</span></td><td class="num">${N(l.admLts)}</td><td class="num">${N(l.balanceLote)}</td><td class="num">${N(l.cdLts)}</td><td class="num">${l.precioMulta}</td><td class="num">${neg(l.cdBs)}</td><td class="num">${neg(l.multasIn)}</td><td class="num">${B(l.totalFlete)}</td>
-        <td class="num"><strong>${B(l.totalFacturar)}</strong>${l.desactualizado ? ' <span class="tag aviso" title="V1 no recalcula esta celda cuando el C/D es mayor o igual a cero (D12)">desactualizado</span>' : ''}</td>
+      ${g.lineas.map(l => { const datos = Object.fromEntries(SILOG.auditoria.linea(s, l, g).map(x => [x.clave, x])); return `<tr class="${l.desactualizado ? 'desactualizada' : ''}"><td class="mono">${esc(l.lote)}</td><td>${esc(l.placa)}</td><td>${esc(l.creDespacho)}</td><td>${esc(loc(l.origenId).codigo)} → ${esc(loc(l.destinoId).codigo)}</td><td class="num">${cc(N(l.volDesp), datos.volDesp)}</td><td class="num">${cc(N(l.volRec), datos.volRec)}</td>
+        <td class="num">${cc(l.tarifaAplicada.toFixed(5), datos.tarifa)}</td><td><span class="tag ${l.tarifaFuente === 'SIN TARIFA' ? 'error' : l.tarifaFuente === 'ADJUDICADA' ? 'prop' : ''}">${esc(l.ajuste.tarifaEspecial ? 'ESPECIAL' : l.tarifaFuente)}</span></td><td class="num">${cc(N(l.admLts), datos.admisible)}</td><td class="num">${cc(N(l.balanceLote), datos.balance)}</td><td class="num">${cc(N(l.cdLts), datos.cdLts)}</td><td class="num">${cc(l.precioMulta, datos.precio)}</td><td class="num">${cc(neg(l.cdBs), datos.cdBs)}</td><td class="num">${cc(neg(l.multasIn), datos.multas)}</td><td class="num">${cc(B(l.totalFlete), datos.flete)}</td>
+        <td class="num">${cc(`<strong>${B(l.totalFacturar)}</strong>`, datos.totalLinea)}${l.desactualizado ? ' <span class="tag aviso" title="V1 no recalcula esta celda cuando el C/D es mayor o igual a cero (D12)">desactualizado</span>' : ''}</td>
         <td>${l.ultima ? `<input type="number" class="in-chico" data-ajuste="liberarCapacidad" data-ayuda="ajCapacidad" data-key="${l.key}" value="${esc(l.ajuste.liberarCapacidad || '')}" ${editable ? '' : 'disabled'} aria-label="Liberar capacidad">` : ''}</td>
         <td><input type="number" step="0.00001" class="in-chico" data-ajuste="tarifaEspecial" data-ayuda="ajTarifaEsp" data-key="${l.key}" value="${esc(l.ajuste.tarifaEspecial || '')}" ${editable ? '' : 'disabled'} aria-label="Tarifa especial"></td>
         <td><input type="checkbox" data-ajuste="liberarMerma" data-ayuda="ajMerma" data-key="${l.key}" ${l.liberarMerma ? 'checked' : ''} ${editable ? '' : 'disabled'} aria-label="Liberar merma"></td>
         <td><input type="text" class="in-obs" data-ajuste="observacion" data-key="${l.key}" value="${esc(l.ajuste.observacion || '')}" ${editable ? '' : 'disabled'} aria-label="Observación"></td>
         ${editable ? `<td class="nowrap"><button class="btn chico" data-accion="cambiarTarifa" data-ayuda="ajTarifaPA" data-key="${l.key}" data-prioridad="PRINCIPAL">P</button><button class="btn chico" data-accion="cambiarTarifa" data-ayuda="ajTarifaPA" data-key="${l.key}" data-prioridad="ALTERNA">A</button></td>` : ''}
         ${c.disputas && Object.keys(c.disputas).length ? `<td>${esc(c.disputas[l.key] || '')}</td>` : ''}</tr>
-        <tr class="fila-traza"><td colspan="22">${traza(l.traza.concat(l.trazaAjuste), '¿Cómo se calculó esta línea?')}${modo() === 'PROPUESTO' && l.ajuste.auditoria ? traza(l.ajuste.auditoria.map(a => `${a.fecha} · ${a.usuario}: ${a.campo} = ${a.valor}`), 'Auditoría de ajustes') : ''}</td></tr>`).join('')}
+        <tr class="fila-traza"><td colspan="22">${traza(l.traza.concat(l.trazaAjuste), '¿Cómo se calculó esta línea?')}${modo() === 'PROPUESTO' && l.ajuste.auditoria ? traza(l.ajuste.auditoria.map(a => `${a.fecha} · ${a.usuario}: ${a.campo} = ${a.valor}`), 'Auditoría de ajustes') : ''}</td></tr>`; }).join('')}
       </tbody></table></div></div>`).join('');
     const acciones = soloLectura ? '' : `<div class="acciones barra">
       <label class="inline">Acción <select id="conc-accion" data-ayuda="concAccion">
@@ -571,7 +622,7 @@ window.SILOG = window.SILOG || {};
           : Object.assign(otroRol('PuedeSolicitarAprobacion', 'Analista LOG o Jefe LOG'), { paso: 'aceptar' });
       case 'Aprobada Por Transportista': {
         const k = M.recalcular(s, c, 'V1').cab;
-        if (k.mermas && !c.facturaMermas) return R('facturas', 'Registra la factura por mermas', `Escribe el número de factura en "Factura mermas" de la N° ${c.numero} y sal del campo (Tab).`, `[data-ot-factura="facturaMermas"][data-id="${c.id}"]`, `Se descontaron ${B(-k.mermas)} Bs de mermas: el transportista las paga con una factura.`, [rechazo]);
+        if (k.mermas && !c.facturaMermas) return R('facturas', 'Registra la factura por mermas', `Escribe la referencia en "Factura mermas" de la N° ${c.numero}. Este simulador guarda al salir; V1 usa Procesar.`, `[data-ot-factura="facturaMermas"][data-id="${c.id}"]`, `El cobro por merma es ${B(-k.mermas)} Bs. Registrar el número no acredita pago; consulta el estudio de facturas en el mapa.`, [rechazo]);
         if (k.multaTransporte && !c.facturaIncumplimiento) return R('facturas', 'Registra la factura por incumplimiento', `Escribe el número de factura en "Factura incumplimiento" de la N° ${c.numero}.`, `[data-ot-factura="facturaIncumplimiento"][data-id="${c.id}"]`, `Hay multas de transporte por ${B(-k.multaTransporte)} Bs.`, [rechazo]);
         return R('pedido', 'Sigue en SAP: crea el pedido', `Esta pantalla ya no tiene ✔ para la N° ${c.numero}. Ve a "Contabilización y SAP", pulsa su fila y luego "Crear pedido".`, '#ot-ir-sap', 'El pedido de compra la pasa a "Pendiente de Aprobacion" y vuelve aquí para solicitar la liberación.', [rechazo]);
       }
@@ -581,7 +632,7 @@ window.SILOG = window.SILOG || {};
       case 'Pendiente de Liberacion':
         return R('sap', 'Termina en SAP', 'Ve a "Contabilización y SAP", pulsa la fila de la conciliación y, en orden: "Liberar pedido", "Registrar hoja de entrada" y "Liberar hoja".', '#ot-ir-sap', 'Al liberar la hoja de entrada, la conciliación queda "Liberado". En Otros Transportes ya no hay nada más que hacer.');
       default:
-        return R('fin', '¡Conciliación terminada!', 'Está "Liberado": el pago lo hace Finanzas a partir de SAP. Mira el resultado y lo que sigue en el camino completo.', '#ot-ir-mapa', 'No quedan acciones en SILOG para esta conciliación.');
+        return R('fin', 'Revisa el resultado de liberación y lo que falta comprobar', 'Liberado no acredita pago. Consulta la aceptación SAP, posibles anulaciones y el estudio de pago/cierre del mapa.', '#ot-ir-mapa', 'El circuito revisado termina la liberación, no confirma una transferencia. Pagos Logística muestra costos; el seguimiento financiero mejorado es propuesta.');
     }
   };
 
@@ -622,7 +673,7 @@ window.SILOG = window.SILOG || {};
     items.push(['Contrato y tarifa', `Contrato ${esc(contrato ? contrato.numero : '—')}. Al generar: ${t0 ? `tarifa #${t0.id} ${t0.prioridad} ${N(t0.tarifa)} Bs/m³ (${dec5(t0.tarifa / 1000)} Bs/L), admisible ${N(t0.admisible)} %, vigente desde ${F(t0.vigInicio)}` : 'sin tarifa vigente (flete 0)'}. Aplicada ahora: ${dec5(ult.tarifa)} Bs/L (${esc(ult.tarifaFuente)}).`, 'MC_Contrato, MC_ContratoHistorial, MC_TarifaOT · MC_DevolverTarifaVigente_OT; la lista P/A1/0 sale de MC_ObtenerPrioridadesTarifas', 'tarifario']);
     items.push(['Precio de multa', `${N(ult.precioMulta)} Bs/L (${esc(ult.precioFuente)}).`, 'ProductoPrecio (MA_PrecioProductoImportado si el origen es extranjero) · ObtenerPrecioProducto', 'precios']);
     const multas = s.multasCRE.filter(m => desps.some(d => d.id === m.creId));
-    if (multas.length) items.push(['Multas por CRE', `${multas.map(m => `${esc((M.porId(s.multasCatalogo, m.multaId) || {}).nombre)}: ${B(m.total)} Bs`).join('; ')}. En V1 son informativas: no entran al neto (D13).`, 'Multa, MultaPorIncumplimiento', 'multas']);
+    if (multas.length) items.push(['Multas por CRE', `${multas.map(m => `${esc((M.porId(s.multasCatalogo, m.multaId) || {}).nombre)}: ${B(m.total)} Bs`).join('; ')}. El SQL las consolida dentro de Multa Transporte al procesar; no descontarlas otra vez.`, 'Multa, MultaPorIncumplimiento', 'multas']);
     const a = ls.map(l => (c.ajustes || {})[l.key] || {});
     const aj = [a.every(x => x.liberarMerma) && 'merma liberada', a.some(x => x.liberarCapacidad) && `capacidad liberada a ${N(a.reduce((t, x) => t + Number(x.liberarCapacidad || 0), 0))} L`,
       a.some(x => x.tarifaEspecial) && 'tarifa especial', a.some(x => x.observacion) && `observación "${esc(a.map(x => x.observacion).filter(Boolean).join(' '))}"`, /^LISTA/.test(ult.tarifaFuente) && `tarifa cambiada en la lista (${esc(ult.tarifaFuente)})`].filter(Boolean);
@@ -654,23 +705,23 @@ window.SILOG = window.SILOG || {};
       ${v.tipo === 'Cisterna' ? `<label>Quincena<select data-cambio="ot.quincena"><option value="1" ${Number(v.quincena) === 1 ? 'selected' : ''}>1ra Quincena</option><option value="2" ${Number(v.quincena) === 2 ? 'selected' : ''}>2da Quincena</option></select></label>` : ''}
       <label>Fecha inicio<input type="date" data-cambio="ot.fi" value="${fi}" ${p.PuedeEditarFechas ? '' : 'disabled'}></label>
       <label>Fecha fin<input type="date" data-cambio="ot.ff" value="${ff}" ${p.PuedeEditarFechas ? '' : 'disabled'}></label></div>`;
-    if (v.tipo !== 'Cisterna') return `${cab}${asistenteOT(V.otSiguiente(s, v, p, [], null))}${filtros}${nota(`El prototipo no tiene ${v.tipo === 'Barcaza' ? 'barcazas ni bones' : 'vagones'} en sus datos. Las reglas propias están documentadas en <code>CONCILIACION_OTROS_TRANSPORTES_V1.md</code>: ${v.tipo === 'Barcaza' ? 'sin prorrateo de despachos, compensación de capacidad con % y capacidad máxima del bone (§6)' : 'flete por toneladas recibidas, merma calculada en litros y kg pero no cobrada, costo de formularios 28,5 por vagón (§7)'}.`, 'aviso')}${permisos}`;
+    if (v.tipo !== 'Cisterna') return `${cab}${asistenteOT(V.otSiguiente(s, v, p, [], null))}${filtros}${nota(`El prototipo no tiene ${v.tipo === 'Barcaza' ? 'barcazas ni bones' : 'vagones'} operativos en sus datos. Debajo hay ejemplos calculados; no crean conciliaciones. Las reglas están documentadas en <code>CONCILIACION_OTROS_TRANSPORTES_V1.md</code>: ${v.tipo === 'Barcaza' ? 'sin prorrateo de despachos, compensación con % y capacidad máxima del bone (§6)' : 'flete por toneladas, merma física no cobrada, formularios 28,5 por FILA de detalle (§7)'}.`, 'aviso')}${permisos}`;
     const lista = s.conciliaciones.filter(c => c.mes === Number(v.mes) && c.anio === Number(v.anio) && c.area === Number(v.area) && c.quincena === Number(v.quincena) &&
       (!Number(v.transportistaId) || c.transportistaId === Number(v.transportistaId))).sort((a, b) => a.numero - b.numero);
     const c = v.concId ? lista.find(x => x.id === v.concId) : null;
     const sig = V.otSiguiente(s, v, p, lista, c);
     const filasCab = lista.map(x => {
-      const b = M.otBotones(x.estado, p), t = M.otTotales(s, x), ed = x.estado === 'Aprobada Por Transportista' || x.estado === 'En Elaboracion';
-      return `<tr class="${c && c.id === x.id ? 'activa' : ''}">
+      const b = M.otBotones(x.estado, p), informe = SILOG.auditoria.conciliacion(s, x, 'V1'), t = informe.visual, ed = x.estado === 'Aprobada Por Transportista' || x.estado === 'En Elaboracion', seleccionada = c && c.id === x.id;
+      return `<tr data-fila-calculo class="${c && c.id === x.id ? 'activa' : ''}">
         <td><input type="checkbox" data-ayuda="otSel" data-ot-sel="${x.id}" ${c && c.id === x.id ? 'checked' : ''} aria-label="Seleccionar conciliación ${x.numero}"></td>
         <td><strong>${esc(trans(x.transportistaId).nombre.toUpperCase())}</strong><br><span class="tenue"># ${x.numero} - ${AREAS[x.area]} ${x.moneda === 'Bs' ? 'BOB' : 'USD'}</span></td>
         <td>${badge(x.estado)}</td>
-        <td>${b.aprobar ? `<button class="btn chico primario" data-accion="otAprobar" data-ayuda="otAprobar" data-id="${x.id}" title="Aprobar">✔</button>` : ''}</td>
-        <td>${b.rechazar ? `<button class="btn chico" data-accion="otRechazar" data-ayuda="otRechazar" data-id="${x.id}" title="Rechazar">✖</button>` : ''}</td>
+        <td>${b.aprobar ? `<button class="btn chico primario" data-accion="otAprobar" data-ayuda="otAprobar" data-id="${x.id}" title="${seleccionada ? 'Aprobar' : 'Marque primero la conciliación'}" ${seleccionada ? '' : 'disabled'}>✔</button>` : ''}</td>
+        <td>${b.rechazar ? `<button class="btn chico" data-accion="otRechazar" data-ayuda="otRechazar" data-id="${x.id}" title="${seleccionada ? 'Rechazar' : 'Marque primero la conciliación'}" ${seleccionada ? '' : 'disabled'}>✖</button>` : ''}</td>
         <td><input class="in-chico" value="${esc(x.facturaMermas)}" data-ot-factura="facturaMermas" data-id="${x.id}" ${ed ? '' : 'disabled'} aria-label="Factura por mermas"></td>
         <td><input class="in-chico" value="${esc(x.facturaIncumplimiento)}" data-ot-factura="facturaIncumplimiento" data-id="${x.id}" ${ed ? '' : 'disabled'} aria-label="Factura por incumplimiento"></td>
-        <td><table class="mini">${t.filas.map(f => `<tr><td>${esc(f[0])}</td><td class="num">${B(f[1])}</td></tr>`).join('')}<tr class="total"><td>Neto Conciliado</td><td class="num">${B(t.neto)}</td></tr></table>
-          ${t.neto !== t.netoGuardado ? `<span class="tag aviso" title="El total mostrado suma todos los recargos; NetoConciliado guardado no (D29)">guardado ${B(t.netoGuardado)}</span>` : ''}</td></tr>`;
+        <td><table class="mini">${t.filas.map(f => `<tr><td>${esc(f[0])}</td><td class="num">${cc(B(f[1]), SILOG.auditoria.conceptoOT(s, x, f[0], f[1], informe))}</td></tr>`).join('')}<tr class="total"><td>Neto Conciliado (visual)</td><td class="num">${cc(B(t.neto), informe.rows.find(r => r.clave === 'netoVisual'))}</td></tr></table>
+          ${t.netoGuardado != null && t.neto !== t.netoGuardado ? `<span class="tag aviso" title="Total visual y neto guardado pueden diferir por recargos, instantánea o CInt.">neto guardado ${cc(B(t.netoGuardado), [informe.rows.find(r => r.clave === 'netoGuardado'), ...(informe.puente || [])])}</span>` : ''}</td></tr>`;
     }).join('');
     let detalle = '';
     if (c) {
@@ -678,13 +729,15 @@ window.SILOG = window.SILOG || {};
       const ed = v.edits;
       const filas = M.otFilas(s, c);
       detalle = `<section class="tarjeta"><div class="cab-detalle"><h2>N° ${c.numero} · detalle por recepción</h2>${badge(c.estado)}</div>
-        <p class="paso-ui">${np(3, 'Paso 3')} Revisa cada fila (una por recepción); ${editable ? 'corrige con las columnas editables, 🗑 o "Nuevo convoy"' : 'ya no es editable en este estado'}. ${np(4, 'Paso 4')} "Procesar" guarda y recalcula. 🔎 explica de dónde viene cada dato.</p>
+        <p class="paso-ui">${np(3, 'Paso 3')} Revisa cada fila (una por recepción); ${editable ? 'corrige con las columnas editables, 🗑 o "Nuevo convoy"' : 'ya no es editable en este estado'}. ${np(4, 'Paso 4')} "Procesar" guarda y recalcula. ⓘ junto a cada valor abre su cálculo debajo de esta fila; 🔎 explica sus datos de origen.</p>
         <div class="acciones">${p.PuedeProcesar ? '<button class="btn primario" data-accion="otProcesar" data-ayuda="otProcesar"><span class="num-paso">4</span> Procesar</button>' : ''}
           ${p.PuedeProcesar && editable ? '<button class="btn" data-accion="otConvoy" data-ayuda="otConvoy">Nuevo convoy</button>' : ''}
-          ${p.PuedeProcesar ? '<a class="btn" href="#recargos">Ver recargos</a>' : ''}</div>
+          ${p.PuedeProcesar ? `<a class="btn" href="#recargos" data-accion="verConc" data-id="${c.id}" data-ir="recargos">Ver recargos</a>` : ''}
+          ${p.PuedeProcesar && editable && SILOG.recorridoMultasOT ? `<button class="btn" data-accion="iniciarMultasOT" data-id="${c.id}">Recorrer multas contractuales</button>` : ''}</div>
         <div class="tabla-scroll"><table class="tabla densa"><thead><tr>${editable ? '<th></th>' : ''}<th>Origen</th><th>Recepción</th><th>Tiempo</th><th>Tramo</th>${th('Despacho', 'volDesp', 'num')}${th('Recepción', 'volRec', 'num')}${th('Balance', 'balanceLote', 'num')}${th('Adm.', 'admLts', 'num')}${th('C/D L', 'cdLts', 'num')}${th('P. multa', 'precioMulta', 'num')}${th('C/D Bs', 'cdBs', 'num')}${th('Lib. merma', 'liberarMerma')}${th('Lib. capacidad L', 'liberarCapacidad')}${th('Tarifa', 'tarifa')}${th('Tarifa especial', 'tarifaEspecial')}${th('Flete', 'totalFlete', 'num')}${th('Observación', 'observacion')}</tr></thead><tbody>
         ${filas.map(f => {
           const e = ed[f.recepcionId] || {};
+          const datos = Object.fromEntries(SILOG.auditoria.filaOT(s, c, f).map(x => [x.clave, x]));
           const opciones = M.otOpcionesTarifa(s, c, f.rec);
           const tarSel = e.tarifa !== undefined ? Number(e.tarifa) : f.tarifa;
           if (!opciones.some(o => o.valor === tarSel)) opciones.unshift({ etiqueta: f.tarifaPromediada ? 'prom.' : 'guardada', valor: tarSel });
@@ -693,13 +746,13 @@ window.SILOG = window.SILOG || {};
             <td><button class="btn chico" data-accion="otOrigen" data-ayuda="otOrigen" data-rec="${f.recepcionId}" aria-expanded="${v.origen === f.recepcionId}" title="¿De dónde viene esta fila?">🔎</button></td>
             <td class="nowrap"><strong>${esc(f.rec.numero)}</strong><br>${esc(f.producto)} - ${f.admPorc}% · ${esc(f.placa)}</td>
             <td class="nowrap">${F(f.fechaCarga)}<br>${F(f.fechaDescarga)}</td><td class="nowrap">${esc(f.tramo)}</td>
-            <td class="num">${N(f.despacho)}</td><td class="num">${N(f.recepcion)}</td><td class="num">${N(f.balance)}</td><td class="num">${N(f.admLts)}</td><td class="num">${N(f.cdLts)}</td><td class="num">${f.precioMulta}</td>
-            <td class="num ${f.liberarMerma ? 'tachado' : ''}">${neg(f.cdBs)}</td>
-            <td><input type="checkbox" data-ot-edit="liberarMerma" data-ot-rec="${f.recepcionId}" ${(e.liberarMerma !== undefined ? e.liberarMerma : f.liberarMerma) ? 'checked' : ''} ${dis('PuedeLiberarMerma')} aria-label="Liberar merma"></td>
-            <td><input type="number" class="in-chico" data-ot-edit="liberarCapacidad" data-ot-rec="${f.recepcionId}" value="${esc(e.liberarCapacidad !== undefined ? e.liberarCapacidad : (f.liberarCapacidad || ''))}" ${dis('PuedeLiberarCapacidad')} aria-label="Liberar capacidad"></td>
-            <td><select data-ayuda="otTarifa" data-ot-edit="tarifa" data-ot-rec="${f.recepcionId}" ${dis('PuedeCambiarTarifa')} aria-label="Tarifa">${opciones.map(o => `<option value="${o.valor}" data-etiqueta="${o.etiqueta}" ${o.valor === tarSel ? 'selected' : ''}>${o.valor.toFixed(5)} ${o.etiqueta}</option>`).join('')}</select>${f.tarifaPromediada ? ' <span class="tag aviso" title="Las líneas tienen tarifas distintas: V1 muestra y guarda el promedio (D27)">prom.</span>' : ''}</td>
-            <td><input type="number" step="0.00001" class="in-chico" data-ot-edit="tarifaEspecial" data-ot-rec="${f.recepcionId}" value="${esc(e.tarifaEspecial !== undefined ? e.tarifaEspecial : (f.tarifaEspecial || ''))}" ${dis('PuedeColocarTarifaEspecial')} aria-label="Tarifa especial"></td>
-            <td class="num"><strong>${B(f.flete)}</strong></td>
+            <td class="num">${cc(N(f.despacho), datos.despacho)}</td><td class="num">${cc(N(f.recepcion), datos.recepcion)}</td><td class="num">${cc(N(f.balance), datos.balance)}</td><td class="num">${cc(N(f.admLts), datos.admLts)}</td><td class="num">${cc(N(f.cdLts), datos.cdLts)}</td><td class="num">${cc(f.precioMulta, datos.precioMulta)}</td>
+            <td class="num">${cc(`<span class="${f.liberarMerma ? 'tachado' : ''}">${neg(f.cdBs)}</span>`, datos.cdBs)}</td>
+            <td><input type="checkbox" data-ot-edit="liberarMerma" data-ot-rec="${f.recepcionId}" ${(e.liberarMerma !== undefined ? e.liberarMerma : f.liberarMerma) ? 'checked' : ''} ${dis('PuedeLiberarMerma')} aria-label="Liberar merma">${cc('', datos.liberarMerma)}</td>
+            <td><input type="number" class="in-chico" data-ot-edit="liberarCapacidad" data-ot-rec="${f.recepcionId}" value="${esc(e.liberarCapacidad !== undefined ? e.liberarCapacidad : (f.liberarCapacidad || ''))}" ${dis('PuedeLiberarCapacidad')} aria-label="Liberar capacidad">${cc('', datos.liberarCapacidad)}</td>
+            <td><select data-ayuda="otTarifa" data-ot-edit="tarifa" data-ot-rec="${f.recepcionId}" ${dis('PuedeCambiarTarifa')} aria-label="Tarifa">${opciones.map(o => `<option value="${o.valor}" data-etiqueta="${o.etiqueta}" ${o.valor === tarSel ? 'selected' : ''}>${o.valor.toFixed(5)} ${o.etiqueta}</option>`).join('')}</select>${f.tarifaPromediada ? ' <span class="tag aviso" title="Las líneas tienen tarifas distintas: V1 muestra y guarda el promedio (D27)">prom.</span>' : ''}${cc('', datos.tarifa)}</td>
+            <td><input type="number" step="0.00001" class="in-chico" data-ot-edit="tarifaEspecial" data-ot-rec="${f.recepcionId}" value="${esc(e.tarifaEspecial !== undefined ? e.tarifaEspecial : (f.tarifaEspecial || ''))}" ${dis('PuedeColocarTarifaEspecial')} aria-label="Tarifa especial">${cc('', datos.tarifaEspecial)}</td>
+            <td class="num">${cc(`<strong>${B(f.flete)}</strong>`, datos.flete)}</td>
             <td><input class="in-obs" data-ot-edit="observacion" data-ot-rec="${f.recepcionId}" value="${esc(e.observacion !== undefined ? e.observacion : f.observacion)}" ${editable ? '' : 'disabled'} aria-label="Observación"></td></tr>${v.origen === f.recepcionId ? `<tr class="fila-origen"><td colspan="${editable ? 18 : 17}">${V.otOrigen(s, c, f)}</td></tr>` : ''}`;
         }).join('')}</tbody></table></div>
         <p class="ayuda">Los cambios se guardan al pulsar Procesar (como en V1). Una fila agrupa las líneas de la recepción: sumas, precio y tarifa promediados, y "liberar merma" marcado solo si todas las líneas lo tienen.</p>
@@ -743,6 +796,10 @@ window.SILOG = window.SILOG || {};
           ${dato ? `<p class="ot-dato"><strong>Dato real de la N° ${c.numero}:</strong> ${esc(dato)}</p>` : ''}
           <a class="btn chico${estado === 'aqui' ? ' primario' : ''}" href="#${e.vista}">Ir a ${esc(V.NOMBRES_VISTA[e.vista] || e.vista)}</a>
         </div></li>
+        ${e.n === 9 && V.ramaContractualOT ? V.ramaContractualOT(c) : ''}
+        ${e.n === 13 && V.ramaFacturasOT ? V.ramaFacturasOT(c, 'general') : ''}
+        ${e.n === 16 && V.ramaSAPOT ? V.ramaSAPOT(c, 'general') : ''}
+        ${e.n === 17 && V.ramaPagoOT ? V.ramaPagoOT(c, 'general') : ''}
         ${e.finOT ? '<li class="ot-marca fin">▲ AQUÍ TERMINA el trabajo en Otros Transportes: lo que sigue ocurre en SAP y en Finanzas</li>' : ''}`;
     }).join('');
     const ALT = [
@@ -771,7 +828,7 @@ window.SILOG = window.SILOG || {};
       ['C/D Bs', 'Calculado', 'ConciliacionCisternaDetalle', 'C/D L × precio de multa; por producto, las demasías compensan las mermas.'],
       ['Tarifa', 'Contrato del transportista', 'MC_TarifaOT (Bs/m³ ÷ 1000)', 'En la fila se muestra el promedio de sus líneas (D27).'],
       ['Flete', 'Calculado', 'ConciliacionCisternaDetalle.TotalFlete', 'Recibido (o base de capacidad liberada) × tarifa.'],
-      ['Totales de la fila', 'ObtenerMontosDeConciliacion', 'ConciliacionCisterna, MC_MultaDescuentoConciliacion', 'Suma todos los conceptos; el neto guardado solo flete + mermas + multa de transporte (D29).']
+      ['Totales de la fila', 'ObtenerMontosDeConciliacion', 'ConciliacionCisterna, MC_MultaDescuentoConciliacion', 'Flete/merma guardados + recargos actuales; CInt decide qué conceptos suma. Multa Transporte incluye CRE. El neto guardado omite MC/DC/casos/carro guía (D29/D34).']
     ];
     return `${cabecera('Otros Transportes: de principio a fin', 'De dónde vienen los datos, dónde empieza y dónde termina el trabajo en "Conciliación Otros Transportes", qué alternativas hay en cada momento y qué se obtiene al final.')}
     <section class="tarjeta"><h2>¿Para qué existe?</h2><div class="grid3">
@@ -796,7 +853,7 @@ window.SILOG = window.SILOG || {};
       ${c ? `<li>Para la N° ${c.numero} (${esc(c.estado)}): neto ${B(k.neto)} ${esc(c.moneda)} = flete ${B(k.flete)} ${k.mermas < 0 ? '−' : '+'} mermas ${B(Math.abs(k.mermas))}${k.multaTransporte ? ` − multa de transporte ${B(Math.abs(k.multaTransporte))}` : ''}.</li>` : ''}</ul></div>
       <div><h2>Qué sigue después</h2><ul>
       <li>Finanzas paga al transportista contra su factura de flete y la hoja de entrada aceptada [I: ocurre fuera de SILOG].</li>
-      <li>El transportista paga la factura por mermas; mientras no lo haga y supere el umbral, V1 bloquea la liberación de sus siguientes conciliaciones.</li>
+      <li>La consulta revisa cobros de la misma empresa, incluida la conciliación actual, con bandera 0 e importe negativo por concepto estrictamente mayor que 50.000. NULL queda fuera; una factura registrada o «sin filas» no acreditan pago.</li>
       <li>Las recepciones excluidas siguen "sin conciliar": se agregan con "Nuevo convoy" o entran en otra conciliación.</li>
       <li>Reportes de control: BalanceOtrosTransporte.aspx, RecepcionesOT.aspx y DespachosOT.aspx.</li>
       <li>La quincena siguiente vuelve a empezar en la etapa 2 con nuevas órdenes.</li></ul></div></div></section>
@@ -811,7 +868,7 @@ window.SILOG = window.SILOG || {};
       <div><h3>Vagón (ejemplo ilustrativo)</h3><p>Un vagón entrega 33.950 kg de diésel; tarifa 120 Bs por tonelada.</p><ul>
         <li>Toneladas = 33.950 / 1.000 = 33,95 t; flete = 33,95 × 120 = 4.074,00 Bs (la tarifa no se divide entre 1000).</li>
         <li>La merma se calcula en litros y kg, pero no se cobra (se fuerza a 0).</li>
-        <li>Costo de formularios: 28,5 por vagón.</li></ul></div></div>
+        <li>Costo de formularios: 28,5 por fila de detalle (no necesariamente por vagón distinto); suma al total visual, no al neto guardado.</li></ul></div></div>
       ${nota('Las reglas están comprobadas en el código de V1 (<code>CONCILIACION_OTROS_TRANSPORTES_V1.md</code> §6 y §7); los números son ilustrativos porque el prototipo no tiene barcazas ni vagones en sus datos.')}</section>`;
   };
 
@@ -821,36 +878,39 @@ window.SILOG = window.SILOG || {};
     const conc = v.concId ? M.porId(s.conciliaciones, v.concId) : recientes.find(c => c.estado === 'En Elaboracion') || recientes[0];
     if (!conc) return `${cabecera('Recargos de la conciliación', '', '<code>MultaDescuentoConciliacion.aspx</code>')}${nota('No hay una conciliación seleccionada. Abra una en "Conciliación cisterna".')}`;
     const editable = conc.estado === 'En Elaboracion';
-    const cat = s.recargosCatalogo.filter(r => r.empresas.includes(conc.transportistaId));
+    const cat = s.recargosCatalogo.filter(r => r.empresas.includes(conc.transportistaId) &&
+      (!SILOG.multasContractuales || SILOG.multasContractuales.elegibilidad(s, conc, r, 'CONCILIACION', modo()).permitido));
     const despachos = [...new Set(conc.lineas.map(l => l.despachoId))].map(id => M.porId(s.cres, id));
     const aplicado = (catId, creId) => conc.recargos.some(r => r.catalogoId === catId && (r.creId || null) === (creId || null));
-    const d = M.recalcular(s, conc, modo());
+    const informe = SILOG.auditoria.conciliacion(s, conc, modo()), d = informe.d, datos = Object.fromEntries(informe.rows.map(x => [x.clave, x]));
     return `${cabecera(`Recargos · Conciliación N° ${conc.numero}`, `${esc(trans(conc.transportistaId).nombre)} · ${periodoTxt(conc)} · ${badge(conc.estado)}`, '<code>MultaDescuentoConciliacion.aspx</code>; tablas <code>MC_MultasDescuentos</code>, <code>MC_MultaDescuentoConciliacion</code>, <code>DetalleCasosConciliacionCisterna</code>, <code>CG_ConciliacionCarroGuia</code>')}
     ${editable ? '' : nota('La conciliación no está en elaboración: los recargos son de solo lectura.', 'aviso')}
-    <section class="tarjeta"><h2>Multas y descuentos contractuales</h2>
-      ${cat.length ? cat.map(r => r.aplicabilidad === 'CONC'
-        ? `<div class="recargo"><label class="inline"><input type="checkbox" data-accion="alternarRecargo" data-ayuda="recContractual" data-cat="${r.id}" ${aplicado(r.id) ? 'checked' : ''} ${editable ? '' : 'disabled'}> <strong>${esc(r.tipo)} a la conciliación</strong> · ${esc(r.concepto)} · ${B(r.monto)} ${r.moneda}</label></div>`
+    ${SILOG.multasContractuales ? V.panelAplicacionContractual(conc) : ''}
+    <section class="tarjeta"><h2>Multas y descuentos a la conciliación</h2>
+      ${cat.length ? cat.map(r => (SILOG.multasContractuales ? SILOG.multasContractuales.cabecera(s, r).aplicabilidad === 'CONCILIACION' : r.aplicabilidad === 'CONC')
+        ? `<div class="recargo"><label class="inline"><input type="checkbox" data-accion="alternarRecargo" data-ayuda="recContractual" data-cat="${r.id}" ${aplicado(r.id) ? 'checked' : ''} ${editable ? '' : 'disabled'}> <strong>${esc(SILOG.multasContractuales ? SILOG.multasContractuales.cabecera(s, r).tipo : r.tipo)} a la conciliación</strong> · ${esc(r.concepto)} · ${B(r.monto)} ${r.moneda}</label></div>`
         : `<div class="recargo"><strong>${esc(r.tipo)} ${r.aplicabilidad === 'CRE_D' ? 'al despacho' : 'a la recepción'}</strong> · ${esc(r.concepto)} · ${B(r.monto)} ${r.moneda} por CRE
           <div class="chips">${despachos.map(dp => `<label class="chip"><input type="checkbox" data-accion="alternarRecargo" data-ayuda="recContractual" data-cat="${r.id}" data-cre="${dp.id}" ${aplicado(r.id, dp.id) ? 'checked' : ''} ${editable ? '' : 'disabled'}> ${esc(dp.numero)}</label>`).join('')}</div></div>`).join('')
-        : nota('No hay recargos contractuales liberados para esta empresa en el periodo.')}
+        : nota('No hay multas/descuentos a la conciliación elegibles para esta empresa y periodo.')}
     </section>
     <section class="tarjeta"><h2>Casos especiales y carro guía</h2>
       <table class="tabla"><thead><tr><th>Tipo</th><th>Concepto</th><th class="num">Monto</th><th>Factura</th><th>Factura pagada</th><th></th></tr></thead><tbody>
-      ${conc.recargos.filter(r => ['CASO', 'CG'].includes(r.tipo)).map(r => `<tr><td>${r.tipo === 'CG' ? 'Carro guía' : 'Caso especial'}</td><td>${esc(r.concepto)}</td><td class="num">${B(r.monto)}</td><td>${esc(r.factura)}</td><td>${r.facturaPagada === false ? '<span class="tag error">No (≥ umbral)</span>' : 'Sí'}</td><td>${editable ? `<button class="btn chico" data-accion="quitarRecargo" data-id="${r.id}">Quitar</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="tenue">Sin registros.</td></tr>'}
+      ${conc.recargos.filter(r => ['CASO', 'CG'].includes(r.tipo)).map(r => `<tr><td>${r.tipo === 'CG' ? 'Carro guía' : 'Caso especial'}</td><td>${esc(r.concepto)}</td><td class="num">${cc(B(r.tipo === 'CASO' ? (r.montoAlmacenado == null ? -r.monto : r.montoAlmacenado) : r.monto), SILOG.auditoria.caso(r))}<small>${r.tipo === 'CASO' ? ' (signo guardado)' : ' (cobro; se descuenta)'}</small></td><td>${esc(r.factura)}</td><td>${r.facturaPagada === false ? '<span class="tag error">No (≥ umbral)</span>' : 'Sí'}</td><td>${editable ? `<button class="btn chico" data-accion="quitarRecargo" data-id="${r.id}">Quitar</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="tenue">Sin registros.</td></tr>'}
       </tbody></table>
       ${editable ? `<div class="form form-linea"><label>Tipo<select id="cs-tipo"><option value="CASO">Caso especial</option><option value="CG">Carro guía</option></select></label>
         <label>Caso<select id="cs-caso">${opts(s.casosEspecialesCatalogo, 17)}</select></label>
-        <label>Monto (Bs)<input id="cs-monto" type="number" value="1500"></label><label>N° factura<input id="cs-factura"></label>
+        <label>Importe positivo (Bs)<input id="cs-monto" type="number" value="1500" min="0.01" step="0.01"></label>
+        <label>Signo del caso<select id="cs-signo"><option value="-1">Descontar (negativo)</option><option value="1">Sumar (positivo)</option></select></label><label>N° factura<input id="cs-factura"></label>
         <button class="btn primario" data-accion="agregarCaso" data-ayuda="recCaso">Agregar</button></div>` : ''}
     </section>
     <section class="tarjeta"><h2>Efecto en el neto</h2>
-      <table class="tabla"><tbody><tr><td>Multa transporte (CCIST)</td><td class="num">${neg(d.cab.multaTransporte)}</td><td>Entra al neto en ambos modos</td></tr>
-      <tr><td>Multa de conciliación (MC)</td><td class="num">${neg(d.cab.multaConciliacion)}</td><td>${modo() === 'V1' ? 'Informativo en V1' : 'Entra al neto'}</td></tr>
-      <tr><td>Descuento de conciliación (DC)</td><td class="num">${neg(d.cab.descuentoConciliacion)}</td><td>${modo() === 'V1' ? 'Informativo en V1' : 'Entra al neto'}</td></tr>
-      <tr><td>Casos especiales</td><td class="num">${neg(d.cab.casosEspeciales)}</td><td>${modo() === 'V1' ? 'Informativo en V1' : 'Entra al neto'}</td></tr>
-      <tr><td>Carro guía</td><td class="num">${neg(d.cab.carroGuia)}</td><td>${modo() === 'V1' ? 'Informativo en V1' : 'Entra al neto'}</td></tr>
-      <tr class="total"><td>Neto conciliado</td><td class="num">${B(d.cab.neto)}</td><td></td></tr></tbody></table>
-      ${nota('[I] En V1 solo la multa de transporte entra en <code>NetoConciliado</code>; los demás montos se devuelven por separado en <code>ObtenerMontosDeConciliacion</code> y se deben verificar en los reportes.')}</section>`;
+      <table class="tabla"><tbody><tr><td>Multa Transporte (CCIST + multas CRE)</td><td class="num">${cc(neg(d.cab.multaTransporte), datos.multaTransporte)}</td><td>Entra al neto procesado en ambos modos; CRE ya incluidas</td></tr>
+      <tr><td>Multa de conciliación (MC)</td><td class="num">${cc(neg(d.cab.multaConciliacion), datos.multaConciliacion)}</td><td>${modo() === 'V1' ? 'Total visual OT; no neto guardado V1' : 'Entra al neto'}</td></tr>
+      <tr><td>Descuento de conciliación (DC)</td><td class="num">${cc(neg(d.cab.descuentoConciliacion), datos.descuentoConciliacion)}</td><td>${modo() === 'V1' ? 'Total visual OT; no neto guardado V1' : 'Entra al neto'}</td></tr>
+      <tr><td>Casos especiales</td><td class="num">${cc(neg(d.cab.casosEspeciales), datos.casosEspeciales)}</td><td>${modo() === 'V1' ? 'Total visual OT; no neto guardado V1' : 'Entra al neto'}</td></tr>
+      <tr><td>Carro guía</td><td class="num">${cc(neg(d.cab.carroGuia), datos.carroGuia)}</td><td>${modo() === 'V1' ? 'Total visual OT; no neto guardado V1' : 'Entra al neto'}</td></tr>
+      <tr class="total"><td>Neto conciliado</td><td class="num">${cc(B(d.cab.neto), datos.netoCisterna)}</td><td></td></tr></tbody></table>
+      ${nota('[C] V1 procesado guarda flete + merma + Multa Transporte (contractuales y CRE). MC/DC/casos/carro guía sí se suman al total VISUAL de OT. Los casos respetan el signo guardado: positivo suma, negativo descuenta. Carro guía siempre se descuenta en esta simulación.')}</section>`;
   };
 
   V.sap = () => {
@@ -860,7 +920,7 @@ window.SILOG = window.SILOG || {};
     const pasoSap = e => M.SAP_ESTADOS.indexOf(e);
     return `${cabecera('Contabilización y SAP', 'Cuando el transportista aprueba, V1 prepara la cabecera y el detalle por producto. Luego, desde la sincronización con SAP, se crea y libera el pedido, se registra y libera la hoja de entrada de servicio; al aceptarse, la conciliación queda "Liberado".', '<code>Sincronizaciones_To_SAP.aspx</code> y <code>ContabilizacionDeConciliaciones.aspx</code>; tablas <code>SAP_ConciliacionMaster</code> y <code>SAP_ConciliacionDetail</code>; conexión a SAP con ERPConnect (<code>App_Code/SincronizadorSAP.vb</code>)')}
     <section class="tarjeta"><table class="tabla seleccionable"><thead><tr><th>Conciliación</th><th>Transportista</th>${th('Estado', 'estado')}<th>Texto SAP</th><th>Tipo</th><th>Moneda</th>${th('Sincronización', 'sap')}<th>Pedido</th><th>Hoja</th><th>Facturas</th></tr></thead><tbody>
-    ${conSap.map(x => `<tr class="${c && c.id === x.id ? 'activa' : ''}" data-accion="verConc" data-id="${x.id}" data-ir="sap" tabindex="0"><td>N° ${x.numero}</td><td>${esc(trans(x.transportistaId).nombre)}</td><td>${badge(x.estado)}</td><td class="mono">${esc(x.sap.texto)}</td><td>${esc(x.sap.tipo)} (${x.sap.codigo})</td><td>${x.sap.moneda}</td><td>${esc(x.sap.estado)}</td><td class="mono">${esc(x.sap.pedido || '')}</td><td class="mono">${esc(x.sap.hoja || '')}</td><td>${x.facturasPagadas === false ? '<span class="tag error">Pendiente</span>' : 'Al día'}</td></tr>`).join('') || '<tr><td colspan="10" class="tenue">Ninguna conciliación tiene aún aprobación del transportista.</td></tr>'}
+    ${conSap.map(x => `<tr class="${c && c.id === x.id ? 'activa' : ''}" data-accion="verConc" data-id="${x.id}" data-ir="sap" tabindex="0"><td>N° ${x.numero}</td><td>${esc(trans(x.transportistaId).nombre)}</td><td>${badge(x.estado)}</td><td class="mono">${esc(x.sap.texto)}</td><td>${esc(x.sap.tipo)} (${x.sap.codigo})</td><td>${x.sap.moneda}</td><td>${esc(x.sap.estado)}</td><td class="mono">${esc(x.sap.pedido || '')}</td><td class="mono">${esc(x.sap.hoja || '')}</td><td>${x.facturasPagadas === false ? '<span class="tag error">Cobros: marca 0</span>' : x.facturasPagadas === true ? 'Cobros: marca 1, no comprobante' : 'Cobros: sin marca conocida'}</td></tr>`).join('') || '<tr><td colspan="10" class="tenue">Ninguna conciliación tiene aún aprobación del transportista.</td></tr>'}
     </tbody></table></section>
     ${c ? `<section class="tarjeta"><h2>N° ${c.numero} · ${esc(trans(c.transportistaId).nombre)} ${badge(c.estado)}</h2>
       <ol class="circuito-sap">${M.SAP_ESTADOS.map((e, i) => `<li class="${i < pasoSap(c.sap.estado) ? 'hecho' : i === pasoSap(c.sap.estado) ? 'actual' : ''}">${esc(e)}</li>`).join('')}</ol>
@@ -869,11 +929,11 @@ window.SILOG = window.SILOG || {};
       <h3>Detalle SAP</h3>
       <p>Periodo ${F(c.sap.periodoInicial)} – ${F(c.sap.periodoFinal)} · ${esc(c.sap.tipo)} · ${c.sap.moneda}</p>
       <table class="tabla"><thead><tr><th>Ítem</th><th>Producto</th><th class="num">Flete</th><th class="num">Volumen</th><th>CeBe</th><th>Cuenta contable</th></tr></thead><tbody>
-      ${c.sap.detalle.map(d => `<tr><td>${d.item}</td><td>${esc(d.producto)}</td><td class="num">${B(d.flete)}</td><td class="num">${N(d.volumen)}</td><td>${esc(d.cebe)}</td><td>${esc(d.cuenta)}</td></tr>`).join('')}</tbody></table>
-      <div class="acciones"><button class="btn" data-accion="facturasPagadas" data-ayuda="sapPagadas">Marcar facturas pagadas</button></div>
+      ${c.sap.detalle.map(d => { const datos = SILOG.auditoria.sap(s, c, d); return `<tr><td>${d.item}</td><td>${esc(d.producto)}</td><td class="num">${cc(B(d.flete), datos[0])}</td><td class="num">${cc(N(d.volumen), datos[1])}</td><td>${esc(d.cebe)}</td><td>${esc(d.cuenta)}</td></tr>`; }).join('')}</tbody></table>
+      <div class="acciones"><button class="btn" data-accion="facturasPagadas" data-ayuda="sapPagadas">Marcar facturas pagadas (cobros simulados)</button></div><p class="ayuda">Este botón general solo actualiza la marca del ejemplo. V1 usa FacturasDelTransportista para los cobros por multas; no es un pago del flete ni prueba bancaria. El estudio detallado está en Facturas y Pago/cierre de Mis documentos.</p>
       ${nota('Una conciliación con registro SAP distinto de "Sin Registrar en SAP" no se puede revertir, ni siquiera por el gerente (RN-EST-05): primero hay que anular hasta el pedido.')}</section>` : ''}
     <section class="tarjeta"><h2>Umbral de facturas impagas</h2><div class="form form-linea"><label>Umbral (solo para simular)<input type="number" id="umbral" value="${s.umbralFacturas}"></label><button class="btn" data-accion="umbral">Aplicar</button></div>
-      ${nota('En V1 el umbral es 50.000 fijo en el código (D18). La validación vive en "Solicitar Liberacion", una acción que la lista de V1 no ofrece en esta versión (comentada): en la práctica la regla no se aplica (RN-EST-04).')}</section>`;
+      ${nota('El simulador general permite variar el umbral; no es un parámetro de V1. Otros Transportes sí consulta FacturasPendienteAPagar al solicitar liberación de cisterna: importe negativo por concepto estrictamente mayor que 50.000 y bandera 0. No se confunde con otra pantalla antigua ni con el pago al proveedor.')}</section>`;
   };
 
   V.portal = () => {
@@ -885,7 +945,7 @@ window.SILOG = window.SILOG || {};
     <div class="filtros"><label>Empresa<select data-cambio="portal.transportistaId">${opts(s.transportistas, tId)}</select></label></div>
     ${modoNota('V1 no comprueba que quien aprueba pertenezca a la empresa (D19): cualquier rol puede aprobar.', 'Solo el rol Transportista puede aprobar o rechazar, y puede disputar líneas con un motivo antes de rechazar.')}
     <section class="tarjeta"><table class="tabla seleccionable"><thead><tr><th>N°</th><th>Periodo</th><th>Estado</th><th class="num">Neto</th></tr></thead><tbody>
-    ${lista.map(x => `<tr class="${c && c.id === x.id ? 'activa' : ''}" data-accion="verPortal" data-id="${x.id}" tabindex="0"><td>${x.numero}</td><td>${periodoTxt(x)}</td><td>${badge(x.estado)}</td><td class="num">${B(M.recalcular(s, x, modo()).cab.neto)}</td></tr>`).join('') || '<tr><td colspan="4" class="tenue">Sin conciliaciones.</td></tr>'}
+    ${lista.map(x => { const informe = SILOG.auditoria.conciliacion(s, x, modo()); return `<tr class="${c && c.id === x.id ? 'activa' : ''}" data-accion="verPortal" data-id="${x.id}" tabindex="0"><td>${x.numero}</td><td>${periodoTxt(x)}</td><td>${badge(x.estado)}</td><td class="num">${cc(B(informe.d.cab.neto), informe.rows.find(x => x.clave === 'netoCisterna'))}</td></tr>`; }).join('') || '<tr><td colspan="4" class="tenue">Sin conciliaciones.</td></tr>'}
     </tbody></table></section>
     ${c ? `<div class="acciones"><button class="btn primario" data-accion="portalTransicion" data-id="${c.id}" data-a="Transportista Aprueba" data-ayuda="portalAprobar">Aprobar</button><button class="btn" data-accion="portalTransicion" data-id="${c.id}" data-a="Transportista Rechaza">Rechazar</button></div>
       ${modo() === 'PROPUESTO' && c.estado === 'En Aprobacion de Transportista' ? `<section class="tarjeta"><h2>Disputar una línea</h2><div class="form form-linea"><label>Línea<select id="disp-key">${c.lineas.map(l => `<option value="${l.key}">${esc(l.creDespacho)} → ${esc(l.creRecepcion)}</option>`).join('')}</select></label><label>Motivo<input id="disp-motivo" placeholder="Ej.: el volumen recibido fue 29.900 L"></label><button class="btn" data-accion="disputar" data-id="${c.id}">Registrar disputa</button></div></section>` : ''}
@@ -993,7 +1053,9 @@ window.SILOG = window.SILOG || {};
       ['Admisible', 'Porcentaje de merma que el contrato tolera sin cobrar al transportista.'],
       ['Merma', 'Pérdida de volumen entre despacho y recepción.'],
       ['Demasía', 'Volumen recibido mayor al despachado.'],
-      ['C/D', 'Crédito/débito: diferencia que se valoriza después de aplicar el admisible.'],
+      ['C/D', 'Ajuste firmado después del admisible: negativo = faltante no admisible; positivo = demasía compensable; cero = sin ajuste cobrable por esta regla. No es préstamo ni prueba de nota/asiento contable. Ver «Crédito/débito paso a paso».'],
+      ['Balance frente a C/D', 'Balance = recibido − despachado. Un balance negativo dentro del admisible puede tener C/D cero. C/D L es físico; C/D Bs valoriza con precio del producto, no con tarifa de flete.'],
+      ['Compensación de C/D', 'Dentro del mismo producto y conciliación, demasías compensan cargos; un saldo positivo final se limita a cero, no genera premio.'],
       ['Precio de multa', 'Precio por litro con el que se cobra la merma no admisible.'],
       ['PPT', 'Precio del producto en terminal.'],
       ['Quincena', 'Periodo de conciliación de cisternas: 1–15 o 16–fin de mes.'],
@@ -1013,11 +1075,14 @@ window.SILOG = window.SILOG || {};
   V.NOMBRES_VISTA = {
     inicio: 'Mapa del proceso', simulador: 'Simulador', localidades: 'Localidades', tarifario: 'Contratos y tarifario', precios: 'Precios',
     ordenes: 'Órdenes de despacho', cre: 'CRE despacho y recepción', multas: 'Multas por CRE', sinconciliar: 'Detalle sin conciliar',
-    conciliaciones: 'Conciliación cisterna', ot: 'Conciliación Otros Transportes', otmapa: 'Otros Transportes: de principio a fin', recargos: 'Recargos', sap: 'Contabilización y SAP', portal: 'Portal del transportista',
-    destino: 'Flujo DESTINO → LEGACY', fuentes: 'Fuentes y trazabilidad', guion: 'Guion del escenario', reglas: 'Reglas', ejemplos: 'Ejemplos de cálculo', mejoras: 'Defectos y propuesta', glosario: 'Glosario', bitacora: 'Bitácora'
+    conciliaciones: 'Conciliación cisterna', generales: 'Conciliaciones generadas', ot: 'Conciliación Otros Transportes', otmapa: 'Otros Transportes: de principio a fin', recargos: 'Recargos', sap: 'Contabilización y SAP', portal: 'Portal del transportista',
+    destino: 'Flujo DESTINO → LEGACY', fuentes: 'Fuentes y trazabilidad', guion: 'Guion del escenario', reglas: 'Reglas', ejemplos: 'Ejemplos de cálculo', mejoras: 'Defectos y propuesta', glosario: 'Glosario', bitacora: 'Bitácora',
+    contratos: 'Contratos y adendas', hojasruta: 'Solicitudes y hojas de ruta', ordenespasos: 'Órdenes conectadas', crepasos: 'CRE conectados',
+    otconectadas: 'Conciliación OT conectada', facturasconectadas: 'Facturas conectadas', sapconectado: 'SAP conectado', pagoscierre: 'Pago y cierre'
   };
 
   V.guion = () => {
+    SILOG.tourConectado?.normalizarProgreso();
     const esc = SILOG.escenarioPorId(E.ui.escenario);
     const hechos = (E.ui.guion && E.ui.guion[esc.id]) || [];
     return `${cabecera(`Guion del escenario: ${esc.nombre}`, esc.objetivo)}
@@ -1027,10 +1092,10 @@ window.SILOG = window.SILOG || {};
       <span class="ayuda">Vuelve a los datos iniciales del escenario y desmarca los pasos. Para cambiar de escenario use el selector de la cabecera.</span>
     </div>
     ${esc.ajustes ? nota(`<strong>Ajustes propios del escenario:</strong> ${esc_(esc.ajustes)}`, 'aviso') : ''}
-    ${nota(`Empiece en <strong>modo V1</strong> y con el rol <strong>Analista LOG</strong>, salvo que el paso indique otra cosa. Los resultados esperados se verifican automáticamente con <code>node pruebas/verificar_escenarios.js</code>.`)}
+    ${nota(esc.id === 'T' ? 'Guía conectada: las actividades/permisos son simulados. Contrasta V1, sus problemas y propuestas en cada paso. Las marcas registran avance de estudio, no pago ni estado operativo. Verificación dirigida: <code>node pruebas/verificar_tour_conectado.js</code>.' : 'Empiece en <strong>modo V1</strong> y con el rol <strong>Analista LOG</strong>, salvo que el paso indique otra cosa. Los resultados esperados se verifican automáticamente con <code>node pruebas/verificar_escenarios.js</code>.')}
     <section class="tarjeta"><table class="tabla guion"><thead><tr><th>Hecho</th><th>#</th><th>Vista</th><th>Qué hacer</th><th>Resultado esperado</th></tr></thead><tbody>
-    ${esc.guion.map((p, i) => `<tr class="${hechos.includes(i) ? 'hecho' : ''}"><td><input type="checkbox" data-paso="${i}" ${hechos.includes(i) ? 'checked' : ''} aria-label="Marcar paso ${i + 1} como hecho"></td><td>${i + 1}</td>
-      <td class="nowrap"><a href="#${p.vista}">${esc_(V.NOMBRES_VISTA[p.vista] || p.vista)}</a></td><td>${esc_(p.paso)}</td><td>${esc_(p.esperado)}</td></tr>`).join('')}
+    ${esc.guion.map((p, i) => `<tr class="${hechos.includes(i) ? 'hecho' : ''}"><td><input type="checkbox" data-paso="${i}" ${hechos.includes(i) ? 'checked' : ''} ${esc.id === 'T' ? 'disabled title="Se marca al completar o leer el paso en la guía"' : ''} aria-label="Avance del paso ${i + 1}"></td><td>${i + 1}</td>
+      <td class="nowrap"><a href="#${p.vista}">${esc_(V.NOMBRES_VISTA[p.vista] || p.vista)}</a></td><td>${p.titulo ? `<strong>${esc_(p.titulo)}</strong><p>${esc_(p.paso)}</p>` : esc_(p.paso)}</td><td>${esc_(p.esperado)}</td></tr>`).join('')}
     </tbody></table><p class="ayuda">${hechos.length} de ${esc.guion.length} pasos marcados.</p></section>
     <section class="tarjeta"><h2>Todos los escenarios</h2><table class="tabla"><thead><tr><th>Escenario</th><th>Objetivo</th><th class="num">Pasos</th><th></th></tr></thead><tbody>
     ${SILOG.ESCENARIOS.map(e => `<tr class="${e.id === esc.id ? 'activa' : ''}"><td class="nowrap"><strong>${esc_(e.nombre)}</strong></td><td>${esc_(e.objetivo)}</td><td class="num">${e.guion.length}</td><td>${e.id === esc.id ? '<span class="tag ok">Activo</span>' : `<button class="btn chico" data-accion="cargarEscenario" data-id="${e.id}">Cargar</button>`}</td></tr>`).join('')}

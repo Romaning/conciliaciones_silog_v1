@@ -209,6 +209,18 @@ window.SILOG = window.SILOG || {};
         SEGURIDAD, AUDITORIA, SIN_TRIGGERS
       ]
     },
+    generales: {
+      resumen: 'Listado transversal de conciliaciones generadas, filtros por tipo, periodo y estado y traza de responsables.',
+      items: [
+        PAN('ConciliacionesGenerales.aspx', 'Listado histórico de conciliaciones generadas.'),
+        UC('ConciliacionesGenerales.ascx.vb', '10-39', 'Inicialización, permisos y carga de la pantalla.'),
+        UC('ConciliacionesGenerales.ascx.vb', '43-82', 'Tipos de transporte y estados disponibles para filtrar.'),
+        UC('ConciliacionesGenerales.ascx.vb', '147-181', 'Carga por tipo, periodo, estado y detalle de responsables.'),
+        P('CargarConciliacionesPorTipo', 'Obtiene las conciliaciones del tipo, mes, año, estado y área.'),
+        T('ConciliacionCisterna', 'Cabecera, estado y responsables; la pantalla V1 también contempla otros medios.'),
+        SEGURIDAD, AUDITORIA, SIN_TRIGGERS
+      ]
+    },
     ot: {
       resumen: 'Pantalla unificada de cisterna, barcaza y vagón con permisos finos por usuario. Estudio completo en CONCILIACION_OTROS_TRANSPORTES_V1.md.',
       items: [

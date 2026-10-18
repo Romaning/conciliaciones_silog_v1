@@ -7,12 +7,13 @@ window.SILOG = window.SILOG || {};
   const E = SILOG.estado, V = SILOG.vistas, M = SILOG.motor;
 
   A.MENU = [
-    ['Entender', [['guion', 'Guion del escenario'], ['inicio', 'Mapa del proceso'], ['simulador', 'Simulador: de dónde a dónde']]],
-    ['Origen de la conciliación', [['localidades', 'Localidades'], ['tarifario', 'Contratos y tarifario'], ['precios', 'Precios de producto'], ['ordenes', 'Órdenes de despacho'], ['cre', 'CRE despacho y recepción'], ['multas', 'Multas por CRE']]],
-    ['Conciliación', [['sinconciliar', 'Detalle sin conciliar'], ['conciliaciones', 'Conciliación cisterna'], ['otmapa', 'Otros Transportes: de principio a fin'], ['ot', 'Conciliación Otros Transportes'], ['recargos', 'Recargos'], ['sap', 'Contabilización y SAP'], ['portal', 'Portal del transportista']]],
+    ['Entender', [['guion', 'Guion del escenario'], ['inicio', 'Mapa del proceso'], ['simulador', 'Simulador: de dónde a dónde'], ['calculos', 'Laboratorio de cálculos'], ['creditodebito', 'Crédito/débito paso a paso']]],
+    ['Origen de la conciliación', [['localidades', 'Localidades'], ['contratos', 'Contratos y adendas paso a paso'], ['tarifario', 'Contratos y tarifario'], ['precios', 'Precios de producto'], ['hojasruta', 'Solicitudes y hojas de ruta paso a paso'], ['ordenespasos', 'Órdenes de despacho paso a paso'], ['crepasos', 'CRE conectados a órdenes paso a paso'], ['ordenes', 'Órdenes del simulador general'], ['cre', 'CRE del simulador general'], ['multas', 'Multas por CRE'], ['multascontractuales', 'Multas contractuales: recorrido completo']]],
+    ['Conciliación', [['otconectadas', 'Otros Transportes con los CRE del recorrido'], ['facturasconectadas', 'Facturas con las mismas conciliaciones'], ['sapconectado', 'SAP con las mismas conciliaciones'], ['pagoscierre', 'Pago y cierre de las mismas conciliaciones'], ['sinconciliar', 'Detalle sin conciliar (escenarios)'], ['conciliaciones', 'Conciliación cisterna'], ['generales', 'Conciliaciones generadas'], ['otmapa', 'Otros Transportes: de principio a fin'], ['ot', 'Conciliación Otros Transportes (escenarios)'], ['recargos', 'Recargos'], ['sap', 'Contabilización y SAP (escenarios)'], ['portal', 'Portal del transportista']]],
     ['Conocimiento y propuesta', [['reglas', 'Reglas de negocio'], ['ejemplos', 'Ejemplos de cálculo'], ['mejoras', 'Defectos y propuesta'], ['destino', 'Flujo propuesto DESTINO → LEGACY'], ['fuentes', 'Fuentes y trazabilidad'], ['glosario', 'Glosario'], ['bitacora', 'Bitácora']]]
   ];
   const RUTAS = new Set(A.MENU.flatMap(g => g[1].map(x => x[0])));
+  A.registrarRuta = nombre => { if (typeof V[nombre] !== 'function') throw new Error('La ruta necesita una vista registrada.'); RUTAS.add(nombre); };
 
   // Estado de cada vista (filtros, selección). No se persiste salvo el modo y el rol.
   A.vs = {
@@ -23,11 +24,14 @@ window.SILOG = window.SILOG || {};
     mul: { creId: null, tc: null, entradas: {} },
     sc: { area: 2, sel: {} },
     conc: { concId: null, estado: '', transportistaId: '' },
+    generales: { tipo: 'Cisterna', estado: '', mes: 9, anio: 2026, concId: null },
     portal: { transportistaId: 1, concId: null },
     reglas: { filtro: '' },
     ot: { tipo: 'Cisterna', area: 2, transportistaId: 0, mes: 9, anio: 2026, quincena: 2, fi: '', ff: '', concId: null, edits: {}, convoy: false, convoySel: [], origen: null },
     otm: { concId: null },
     fuentes: { tipo: '', texto: '' },
+    cal: { concId: null },
+    cd: { casoId: 'faltante-fuera' },
     ej: Object.assign({}, V.EJEMPLOS ? V.EJEMPLOS[0] : {})
   };
   let mensaje = null;
@@ -81,7 +85,11 @@ window.SILOG = window.SILOG || {};
   const selPaso = p => typeof p.sel === 'function' ? p.sel(E.st) : p.sel;
 
   // ───────────────────────── recorrido guiado ─────────────────────────
-  A.pasosTour = () => SILOG.tourDe(SILOG.escenarioPorId(E.ui.escenario));
+  A.pasosTour = () => {
+    SILOG.tourConectado?.normalizarProgreso();
+    return E.ui.tour && E.ui.tour.rama === 'MULTAS_OT' && SILOG.recorridoMultasOT
+      ? SILOG.recorridoMultasOT.pasos : SILOG.tourDe(SILOG.escenarioPorId(E.ui.escenario));
+  };
   A.renderTour = () => {
     const caja = document.getElementById('tour');
     document.querySelectorAll('.guia-resaltado').forEach(x => x.classList.remove('guia-resaltado'));
@@ -90,41 +98,57 @@ window.SILOG = window.SILOG || {};
     const pasos = A.pasosTour();
     const i = Math.min(t.paso || 0, pasos.length - 1);
     const p = pasos[i];
+    if (!p) { caja.hidden = true; caja.innerHTML = ''; return; }
     const enVista = A.ruta() === p.vista;
     const hecho = p.hecho ? !!p.hecho(E.st, A) : null;
     const sel = selPaso(p);
+    const evidencia = p.evidencia?.(), z = p.conectado && SILOG.tourConectado.expediente();
+    const errores = p.conectado && p.id !== 'preparar' ? SILOG.tourConectado.problemas() : [];
     if (enVista && sel) { const el = document.querySelector('#vista ' + sel) || document.querySelector(sel); if (el) el.classList.add('guia-resaltado'); }
     caja.hidden = false;
     caja.innerHTML = `<div class="tour-cab"><span>Paso ${i + 1} de ${pasos.length}</span><strong>${V.esc(p.titulo || 'Paso')}</strong>
         <button class="cerrar" data-accion="tourCerrar" aria-label="Cerrar el recorrido">×</button></div>
       <div class="tour-barra" aria-hidden="true"><span style="width:${Math.round((i + (hecho ? 1 : 0)) / pasos.length * 100)}%"></span></div>
+      ${p.conectado ? `<p class="nota ${p.propuesta ? 'nota-aviso' : 'nota-info'}">${p.propuesta ? 'PROPUESTA: ensayo local; no es una operación V1 ni un pago real.' : p.lectura ? 'Lectura de estudio: avanzar no registra esta operación ni una excepción en el viaje.' : 'Práctica con datos ficticios y reglas contrastadas de V1. El control de avance es didáctico, no una nueva regla de negocio.'}</p><details><summary>Expediente seguido y mismos documentos</summary><p>${V.esc(SILOG.tourConectado.resumen()).replace(/\n/g, '<br>')}</p></details>` : ''}
+      ${t.actualizacion ? `<p class="nota nota-aviso">${V.esc(t.actualizacion)}</p>` : ''}
       ${enVista ? '' : `<p class="tour-ir">Este paso es en <strong>${V.esc(V.NOMBRES_VISTA[p.vista] || p.vista)}</strong>. <button class="btn chico primario" data-accion="tourIr">Ir a la pantalla</button></p>`}
       <dl class="tour-dl"><dt>Qué hacer</dt><dd>${V.esc(p.hacer)}</dd>
         ${p.porque ? `<dt>Por qué</dt><dd>${V.esc(p.porque)}</dd>` : ''}
         ${p.veras ? `<dt>Qué verás</dt><dd>${V.esc(p.veras)}</dd>` : ''}</dl>
+      ${p.resultado && z ? `<p class="nota nota-info">${V.esc(p.resultado(z))}</p>` : ''}
+      ${evidencia ? `<details class="estudio-bloque"><summary>Contraste con SILOG_V1: existente, problema y mejora</summary><h3>Lo existente en SILOG_V1</h3><p>${V.esc(evidencia.existe)}</p><p><small>Fuente: ${V.esc(evidencia.fuente)}</small></p><h3>Problema o límite</h3><p>${V.esc(evidencia.problema)}</p><h3>Propuesta de mejora</h3><p>${V.esc(evidencia.propuesta)}</p></details>` : ''}
+      ${errores.length ? `<p class="nota nota-error">${V.esc(errores.join(' '))}</p>` : ''}
+      ${p.vincular && hecho === false && enVista ? `${p.vincular === 'definicion' && z ? `<label>Definición contractual del expediente<select id="tour-documento"><option value="">Selecciona por ID</option>${z.m.recorridoConciliaciones.multasContractuales.filter(h => h.tipoContratoId === z.c?.medio && h.aplicabilidad === 'CRE_D').map(h => `<option value="${h.id}">#${h.id} · ${V.esc(h.denominacion)}</option>`).join('')}</select></label>` : ''}<button class="btn chico" data-accion="tourVincular">Vincular documento seleccionado</button><p class="ayuda">Usa este botón si registraste el documento desde el formulario. Se comprueban sus relaciones; no se escoge el último por su número.</p>` : ''}
       ${hecho === true ? '<p class="tour-ok">✔ Paso cumplido. Revisa el resultado y pulsa "Siguiente".</p>' : hecho === false ? '<p class="tour-pend">Esperando que lo hagas… (o usa "Hazlo por mí")</p>' : ''}
       <div class="tour-acciones">
+        ${p.ramaMultas && A.vs.ot.concId && SILOG.recorridoMultasOT ? `<button class="btn chico" data-accion="iniciarMultasOT" data-id="${A.vs.ot.concId}">Recorrer multas contractuales (opcional)</button>` : ''}
+        ${p.ramaFacturas && p.facturaConcId?.() && SILOG.recorridoIntegradoOT ? `<button class="btn chico" data-ri-facturas="${p.facturaConcId()}">Estudiar facturas de este ejemplo</button>` : ''}
+        ${p.ramaSAP && p.sapConcId?.() ? `<button class="btn chico" data-ri-sap="${p.sapConcId()}">Estudiar SAP de este ejemplo</button>` : ''}
+        ${p.ramaPago && p.pagoConcId?.() ? `<button class="btn chico" data-ri-pago="${p.pagoConcId()}">Estudiar pago y cierre de este ejemplo</button>` : ''}
+        ${t.rama === 'MULTAS_OT' ? '<button class="btn chico" data-accion="tourVolverOT">Volver a Otros Transportes</button>' : ''}
         <button class="btn chico" data-accion="tourAnt" ${i === 0 ? 'disabled' : ''}>Anterior</button>
         ${enVista && sel ? '<button class="btn chico" data-accion="tourDonde">Mostrar dónde</button>' : ''}
         ${p.auto && hecho === false ? '<button class="btn chico" data-accion="tourAuto">Hazlo por mí</button>' : ''}
-        <button class="btn chico primario" data-accion="tourSig" ${hecho === false ? 'disabled title="Primero completa el paso o usa Hazlo por mí"' : ''}>${i === pasos.length - 1 ? 'Terminar' : 'Siguiente'}</button>
+        <button class="btn chico primario" data-accion="tourSig" ${hecho === false || errores.length || p.conectado && !enVista ? 'disabled title="Abre el paso y comprueba sus documentos antes de continuar"' : ''}>${i === pasos.length - 1 ? 'Terminar' : p.lectura ? 'Leído, continuar' : 'Siguiente'}</button>
       </div>`;
   };
   function irPaso(i) {
     const pasos = A.pasosTour();
-    E.ui.tour = { activo: true, paso: Math.max(0, Math.min(i, pasos.length - 1)) };
+    E.ui.tour = Object.assign({}, E.ui.tour, { activo: true, paso: Math.max(0, Math.min(i, pasos.length - 1)) });
     E.guardar();
     if (pasos[E.ui.tour.paso].preparar) pasos[E.ui.tour.paso].preparar();
     const v = pasos[E.ui.tour.paso].vista;
     if (A.ruta() !== v) location.hash = v; else A.render();
   }
   A.iniciarTour = () => irPaso(0);
+  A.irPasoTour = irPaso;
 
   function resultado(r, irA) {
     if (r) mensaje = r;
     if (irA && location.hash !== '#' + irA) { location.hash = irA; return; }
     A.render();
   }
+  A.notificar = resultado;
   const val = id => { const el = document.getElementById(id); return el ? el.value : ''; };
 
   // ───────────────────────── acciones de clic ─────────────────────────
@@ -136,17 +160,30 @@ window.SILOG = window.SILOG || {};
     tourAnt: () => irPaso(((E.ui.tour || {}).paso || 0) - 1),
     tourSig: () => {
       const i = (E.ui.tour || {}).paso || 0, pasos = A.pasosTour();
-      if (i >= pasos.length - 1) { E.ui.tour.activo = false; E.guardar(); mensaje = { ok: true, msg: '¡Recorrido terminado! Puedes reiniciar el escenario y repetirlo, o elegir otro escenario.' }; A.render(); return; }
+      const p = pasos[i];
+      if (p.conectado) {
+        const errores = p.id === 'preparar' ? [] : SILOG.tourConectado.problemas();
+        if (p.hecho?.(E.st) === false || errores.length || A.ruta() !== p.vista) return resultado({ ok: false, msg: errores.join(' ') || 'Abre y completa este paso antes de continuar.' });
+        if (p.lectura) { const g = SILOG.tourConectado.expediente().g; if (!g.lecturas.includes(p.id)) g.lecturas.push(p.id); }
+      }
+      if (i >= pasos.length - 1 && E.ui.tour.rama === 'MULTAS_OT') return SILOG.recorridoMultasOT.volver();
+      if (i >= pasos.length - 1) { if (p.conectado) E.marcarPaso(i, true); E.ui.tour.activo = false; E.guardar(); mensaje = { ok: true, msg: p.conectado ? 'Guía terminada con el mismo expediente. V1 Liberado no acredita pago; el seguimiento financiero es una propuesta ficticia y las brechas indicadas siguen pendientes.' : '¡Recorrido terminado! Puedes reiniciar el escenario y repetirlo, o elegir otro escenario.' }; A.render(); return; }
       const esc = SILOG.escenarioPorId(E.ui.escenario);
-      if (esc.tour) E.marcarPaso(i, true);
+      if (esc.tour && E.ui.tour.rama !== 'MULTAS_OT') E.marcarPaso(i, true);
       irPaso(i + 1);
     },
     tourDonde: () => { const el = document.querySelector('.guia-resaltado'); if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.classList.remove('guia-pulso'); void el.offsetWidth; el.classList.add('guia-pulso'); } },
+    iniciarMultasOT: el => SILOG.recorridoMultasOT.iniciar(Number(el.dataset.id)),
+    tourVolverOT: () => SILOG.recorridoMultasOT.volver(),
     tourAuto: () => {
       const p = A.pasosTour()[(E.ui.tour || {}).paso || 0];
-      const r = p.auto();
+      let r; try { r = p.auto(); } catch (e) { r = { ok: false, msg: e.message }; }
       if (r) mensaje = { ok: r.ok, msg: 'Hecho por ti: ' + r.msg };
       if (A.ruta() !== p.vista) location.hash = p.vista; else A.render();
+    },
+    tourVincular: () => {
+      const p = A.pasosTour()[(E.ui.tour || {}).paso || 0];
+      if (p.conectado && p.vincular) resultado(SILOG.tourConectado.vincular(p.vincular, val('tour-documento')));
     },
     ayudaCerrar: () => cerrarPopover(),
     otDonde: () => {
@@ -187,12 +224,21 @@ window.SILOG = window.SILOG || {};
       if (r.ok) { A.vs.sc.sel = {}; A.vs.conc.concId = r.ids[0]; }
       resultado(r, r.ok ? 'conciliaciones' : null);
     },
-    verConc: el => { A.vs.conc.concId = Number(el.dataset.id); resultado(null, el.dataset.ir || 'conciliaciones'); },
+    verConc: el => {
+      A.vs.conc.concId = Number(el.dataset.id);
+      if (el.dataset.ir === 'multascontractuales' && SILOG.controlMultas) {
+        Object.assign(SILOG.controlMultas.vista(), { concId: A.vs.conc.concId, creId: null, borrador: {} });
+      }
+      resultado(null, el.dataset.ir || 'conciliaciones');
+    },
+    verCalculos: el => { A.vs.cal.concId = Number(el.dataset.id); resultado(null, 'calculos'); },
+    abrirCalculoFila: el => SILOG.calculosEnFilas.abrir(el),
+    cerrarCalculoFila: el => SILOG.calculosEnFilas.cerrar(el),
     procesar: () => resultado(E.procesar(A.vs.conc.concId)),
     transicion: () => resultado(E.transicion(A.vs.conc.concId, val('conc-accion'))),
     cambiarTarifa: el => resultado(E.cambiarTarifaLinea(A.vs.conc.concId, el.dataset.key, el.dataset.prioridad)),
     alternarRecargo: el => resultado(E.alternarRecargo(concActual(), Number(el.dataset.cat), el.dataset.cre ? Number(el.dataset.cre) : null)),
-    agregarCaso: () => resultado(E.agregarCaso(concActual(), { tipo: val('cs-tipo'), casoId: val('cs-caso'), monto: val('cs-monto'), factura: val('cs-factura') })),
+    agregarCaso: () => resultado(E.agregarCaso(concActual(), { tipo: val('cs-tipo'), casoId: val('cs-caso'), monto: val('cs-monto'), signo: val('cs-signo'), factura: val('cs-factura') })),
     quitarRecargo: el => resultado(E.quitarRecargo(concActual(), Number(el.dataset.id))),
     sapAccion: el => resultado(E.sapAccion(concSap(), el.dataset.a)),
     facturasPagadas: () => resultado(E.marcarFacturasPagadas(concSap())),
@@ -220,7 +266,8 @@ window.SILOG = window.SILOG || {};
     Object.assign(A.vs.ot, { tipo: 'Cisterna', area: c.area, mes: c.mes, anio: c.anio, quincena: c.quincena, transportistaId: 0, fi: '', ff: '', concId: marcar ? c.id : null, edits: {}, convoy: false, convoySel: [], origen: null });
   }
   function limpiarVs() {
-    A.vs.sc.sel = {}; A.vs.conc = { concId: null, estado: '', transportistaId: '' }; A.vs.ord = { ordenId: null, sel: [] };
+    A.vs.mc = null;
+    A.vs.sc.sel = {}; A.vs.conc = { concId: null, estado: '', transportistaId: '' }; A.vs.generales = { tipo: 'Cisterna', estado: '', mes: 9, anio: 2026, concId: null }; A.vs.ord = { ordenId: null, sel: [] };
     A.vs.cre.sel = []; A.vs.mul = { creId: null, tc: null, entradas: {} }; A.vs.portal.concId = null;
     Object.assign(A.vs.ot, { concId: null, edits: {}, convoy: false, convoySel: [], fi: '', ff: '', origen: null });
     A.vs.otm.concId = null;
@@ -272,6 +319,8 @@ window.SILOG = window.SILOG || {};
   }
   ['mousedown', 'click'].forEach(tipo => document.addEventListener(tipo, ev => {
     if (!E.ui.ayuda) return;
+    // Consultas de cálculo siempre son de lectura, incluso dentro de una fila con ayuda.
+    if (ev.target.closest('.calculo-celda, tr.calculo-fila')) return;
     if (ev.target.closest('#popover-ayuda, #tour, #ayuda-toggle, #guia-toggle')) return;
     const el = ev.target.closest('[data-ayuda]');
     if (!el) { if (tipo === 'click') cerrarPopover(); return; }
@@ -286,6 +335,7 @@ window.SILOG = window.SILOG || {};
 
   document.addEventListener('keydown', ev => {
     if (ev.key === 'Escape') cerrarPopover();
+    if (ev.key === 'Escape' && ev.target.closest('tr.calculo-fila')) { ev.preventDefault(); SILOG.calculosEnFilas.cerrar(ev.target); }
     if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.matches('tr[data-accion]')) { ev.preventDefault(); ev.target.click(); }
   });
   document.addEventListener('change', ev => {
@@ -301,6 +351,7 @@ window.SILOG = window.SILOG || {};
       if (vista === 'sim' && campo === 'cisternaId') { const c = M.porId(E.st.cisternas, el.value); if (c && Number(A.vs.sim.volDespacho) > c.capacidad) A.vs.sim.volDespacho = c.capacidad; }
       if (vista === 'mul' && campo === 'creId') { A.vs.mul.creId = Number(el.value); A.vs.mul.entradas = {}; }
       if (vista === 'conc') A.vs.conc.concId = null;
+      if (vista === 'generales') A.vs.generales.concId = null;
       if (vista === 'ot' && !['fi', 'ff'].includes(campo)) { Object.assign(A.vs.ot, { concId: null, edits: {}, convoy: false, convoySel: [], origen: null }); if (['tipo', 'mes', 'anio', 'quincena'].includes(campo)) { A.vs.ot.fi = ''; A.vs.ot.ff = ''; } }
       if (vista === 'portal') A.vs.portal.concId = null;
       return A.render();
@@ -345,7 +396,7 @@ window.SILOG = window.SILOG || {};
     if (t && t.activo) { const p = A.pasosTour()[t.paso || 0]; if (p && p.preparar) p.preparar(); }
     document.getElementById('reiniciar').addEventListener('click', acc.reiniciar);
     document.getElementById('ayuda-toggle').addEventListener('click', () => { E.ui.ayuda = !E.ui.ayuda; E.guardar(); cerrarPopover(); A.render(); });
-    document.getElementById('guia-toggle').addEventListener('click', () => { if (E.ui.tour && E.ui.tour.activo) acc.tourCerrar(); else if (E.ui.tour && E.ui.tour.paso) irPaso(E.ui.tour.paso); else A.iniciarTour(); });
+    document.getElementById('guia-toggle').addEventListener('click', () => { A.pasosTour(); if (E.ui.tour && E.ui.tour.activo) acc.tourCerrar(); else if (E.ui.tour && E.ui.tour.paso) irPaso(E.ui.tour.paso); else A.iniciarTour(); });
     A.render();
   };
 })(SILOG.app = {});

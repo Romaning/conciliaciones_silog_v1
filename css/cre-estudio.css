@@ -1,0 +1,8 @@
+/* Complementa el estilo del recorrido de órdenes sin reemplazar tipografía ni botones. */
+.cr-totales { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 12px; margin: 20px 0; }
+.cr-totales > div { padding: 16px; border: 1px solid var(--borde); border-radius: var(--radio); }
+.cr-totales strong { display: block; font-size: 1.2em; margin-top: 8px; }
+.cr-estudio fieldset { border: 1px solid var(--borde); border-radius: var(--radio); margin: 16px 0; padding: 16px; min-width: 0; }
+.cr-estudio legend { font-weight: 600; padding: 0 6px; }
+.cr-estudio [data-cr-medicion] { overflow-wrap: anywhere; }
+@media (max-width: 650px) { .cr-totales { grid-template-columns: minmax(0, 1fr); } }

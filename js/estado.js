@@ -15,6 +15,7 @@ window.SILOG = window.SILOG || {};
 
   // ───────────────────────── persistencia ─────────────────────────
   E.guardar = () => {
+    if (E.ui.ramaMultasOT && SILOG.app && SILOG.app.vs && SILOG.app.vs.mc) E.ui.ramaMultasOT.seleccion = { ...SILOG.app.vs.mc };
     try { localStorage.setItem(CLAVE, JSON.stringify({ st: E.st, ui: E.ui })); } catch (e) { /* sin almacenamiento */ }
   };
   E.cargar = () => {
@@ -22,7 +23,14 @@ window.SILOG = window.SILOG || {};
       const raw = localStorage.getItem(CLAVE);
       if (raw) {
         const d = JSON.parse(raw);
-        if (d && d.st && d.st.version === 5) { E.st = d.st; E.ui = Object.assign(E.ui, d.ui || {}); return; }
+        if (d && d.st && d.st.version === 5) {
+          E.st = d.st; E.ui = Object.assign(E.ui, d.ui || {});
+          if (SILOG.multasContractuales) SILOG.multasContractuales.preparar(E.st);
+          if (E.st.estudioOrdenes && SILOG.ordenesEstudio) {
+            SILOG.ordenesEstudio.preparar(E.st); SILOG.conciliacionesEstudio?.preparar(E.st.estudioOrdenes);
+          }
+          return;
+        }
       }
     } catch (e) { /* sin almacenamiento */ }
     E.reiniciar(true);
@@ -107,11 +115,13 @@ window.SILOG = window.SILOG || {};
     E.ui.guion = E.ui.guion || {};
     E.ui.guion[esc.id] = [];
     E.ui.visitadas = [];
+    E.ui.ramaMultasOT = null;
     E.ui.tour = { activo: !!esc.tour && !!(E.ui.tour && E.ui.tour.activo), paso: 0 };
     E.st = SILOG.crearEscenario();
     const st = E.st;
     st.escenarioId = esc.id;
     if (esc.preparar) esc.preparar(st, M);
+    if (SILOG.multasContractuales) SILOG.multasContractuales.preparar(st);
 
     // Viajes ya ocurridos: orden liberada, CRE de despacho, recepciones y multas por CRE.
     const ordenes = {};
@@ -192,13 +202,17 @@ window.SILOG = window.SILOG || {};
     const c = grupo.contrato;
     const conc = {
       id: sigId(st.conciliaciones), numero: numero || st.nroConcProximo++, transportistaId: grupo.transportistaId,
-      area: grupo.area, anio: grupo.anio, mes: grupo.mes, quincena: grupo.quincena, moneda,
+      tipo: 'Cisterna', area: grupo.area, anio: grupo.anio, mes: grupo.mes, quincena: grupo.quincena, moneda,
       contratoId: c ? c.id : null, nroContratoMarco: c && c.marco ? c.marco.numero : null,
       estado: 'En Elaboracion', fecha: st.hoy, generadoEn: modo,
       lineas: [].concat(...recepcionesSel.map(r => r.lineas.map(l => Object.assign({}, l)))),
       ajustes: {}, recargos: [], historial: [], facturaMermas: '', facturaIncumplimiento: '', facturasPagadas: true, sap: null, disputas: {}
     };
     conc.totales = M.recalcular(st, conc, modo).cab;
+    if (modo === 'V1') {
+      // DetalleSinConciliar genera Flete + Mermas; OT incorpora incumplimientos al Procesar.
+      conc.totales = Object.assign({}, conc.totales, { multaTransporte: 0, neto: M.redHU(conc.totales.flete + conc.totales.mermas), faseCalculo: 'GENERACION' });
+    }
     return conc;
   }
 
@@ -456,10 +470,18 @@ window.SILOG = window.SILOG || {};
     const conc = M.porId(st.conciliaciones, concId);
     if (conc.estado !== 'En Elaboracion') return error('Los recargos solo se modifican con la conciliación en elaboración.');
     const cat = M.porId(st.recargosCatalogo, catalogoId);
-    const tipo = cat.aplicabilidad === 'CONC' ? (cat.tipo === 'Multa' ? 'MC' : 'DC') : 'CCIST';
+    if (!cat) return error('No existe el recargo.');
+    const h = SILOG.multasContractuales ? SILOG.multasContractuales.cabecera(st, cat) : null;
+    const esConciliacion = h ? h.aplicabilidad === 'CONCILIACION' : cat.aplicabilidad === 'CONC';
+    if (h) {
+      const v = SILOG.multasContractuales.elegibilidad(st, conc, cat, esConciliacion ? 'CONCILIACION' : (M.porId(st.cres, creId) || {}).tipo === 3 ? 'CRE_D' : 'CRE_R', E.ui.modo);
+      if (!v.permitido) return error(v.motivos.join(' '));
+      if (E.ui.permisosMultas && !E.ui.permisosMultas['MC Aplicar Multa Descuento']) return error('Falta el permiso simulado MC Aplicar Multa Descuento.');
+    }
+    const tipo = esConciliacion ? ((h ? h.tipo : cat.tipo) === 'Multa' ? 'MC' : 'DC') : 'CCIST';
     const idx = conc.recargos.findIndex(r => r.catalogoId === cat.id && (r.creId || null) === (creId || null));
     if (idx >= 0) conc.recargos.splice(idx, 1);
-    else conc.recargos.push({ id: Date.now(), tipo, catalogoId: cat.id, concepto: cat.concepto, monto: cat.monto, creId: creId || null, factura: '' });
+    else conc.recargos.push({ id: Date.now(), tipo, catalogoId: cat.id, concepto: cat.concepto, monto: cat.monto, moneda: cat.moneda, tc: st.tc, cantidad: 1, creId: creId || null, factura: '', registro: { usuario: E.ui.usuario, fecha: new Date().toISOString() } });
     E.guardar();
     return ok(idx >= 0 ? 'Recargo quitado.' : 'Recargo aplicado.');
   };
@@ -470,7 +492,10 @@ window.SILOG = window.SILOG || {};
     const monto = Number(d.monto);
     if (!(monto > 0)) return error('Indique un monto mayor a 0.');
     const caso = M.porId(st.casosEspecialesCatalogo, d.casoId);
-    conc.recargos.push({ id: Date.now(), tipo: d.tipo || 'CASO', casoId: caso ? caso.id : null, concepto: d.tipo === 'CG' ? 'Cobro por carro guía' : caso.nombre, monto, factura: d.factura || '', facturaPagada: monto < st.umbralFacturas });
+    if (d.tipo !== 'CG' && !caso) return error('Seleccione un caso especial existente.');
+    const firmado = d.tipo === 'CG' ? monto : monto * (Number(d.signo) === 1 ? 1 : -1);
+    conc.recargos.push({ id: Date.now(), tipo: d.tipo || 'CASO', casoId: caso ? caso.id : null, concepto: d.tipo === 'CG' ? 'Cobro por carro guía' : caso.nombre, monto,
+      montoAlmacenado: firmado, factura: d.factura || '', facturaPagada: (d.tipo === 'CG' ? monto : -firmado) < st.umbralFacturas });
     E.guardar();
     return ok('Registrado.');
   };
@@ -540,7 +565,7 @@ window.SILOG = window.SILOG || {};
     return ok(`${permiso} ${valor ? 'otorgado a' : 'quitado a'} ${rol}.`);
   };
   const sinAcceso = () => error('SinAcceso.aspx: el usuario no tiene permisos en CONFIGURACION_CONCILIACIONES para este tipo y área.');
-  function reprocesar(conc) { conc.totales = M.recalcular(E.st, conc, 'V1').cab; }
+  function reprocesar(conc) { conc.totales = M.otCabecera(E.st, conc); }
 
   // btnProcesar_Click (593-775). edits[recepcionId] = { liberarMerma, liberarCapacidad, tarifa, etiqueta, tarifaEspecial, observacion }.
   E.otProcesar = (concId, edits) => {

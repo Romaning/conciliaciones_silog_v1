@@ -77,7 +77,7 @@ SILOG.INTRO_VISTAS = {
     quien: 'Supervisión de transporte.',
     cuando: 'Cuando hubo un incidente en el viaje.',
     pasos: ['Elige el CRE de despacho.', 'Escribe cantidades (días, conductores) o marca las multas fijas.', 'Revisa el total y pulsa "Registrar".'],
-    observar: ['Solo se puede si la conciliación de ese despacho no existe o está "En Elaboracion".', 'En V1 estas multas se muestran en la conciliación pero NO entran al neto (solo las contractuales).'],
+    observar: ['Solo se puede si la conciliación de ese despacho no existe o está "En Elaboracion".', 'En V1 procesado las multas clásicas por CRE se suman con las contractuales dentro de Multa Transporte; sí afectan al neto y no deben descontarse otra vez.'],
     ux: ['Unificar todos los cobros (multas por CRE y contractuales) en un solo catálogo de recargos que siempre entre al neto.']
   },
   sinconciliar: {
@@ -96,20 +96,28 @@ SILOG.INTRO_VISTAS = {
     observar: ['Las demasías compensan mermas del mismo producto, pero nunca se pagan.', 'En modo V1 algunas acciones están "comentadas": existen en el código pero V1 no las ofrece.'],
     ux: ['Los ajustes deberían pedir motivo y adjunto y quedar auditados; los estados deberían mostrar quién y qué sigue.']
   },
+  generales: {
+    proposito: 'Consulta el listado transversal de conciliaciones generadas, sin repetir el cálculo ni el detalle de cada conciliación.',
+    quien: 'Analista, jefe de logística y usuarios que necesitan trazabilidad.',
+    cuando: 'Cuando se necesita localizar una conciliación por tipo, periodo o estado y saber quién intervino.',
+    pasos: ['Selecciona el tipo de conciliación, mes, año y estado.', 'Lee el neto conciliado y la traza resumida de responsables.', 'Pulsa "Ver detalle" para abrir la conciliación cisterna existente y consultar sus líneas, ajustes e historial.'],
+    observar: ['Los tipos que V1 contempla pero que no tienen datos en este prototipo aparecen identificados y no se inventan filas.', 'La traza resume generación, aprobación del transportista, aprobación LOG, rechazo y liberación cuando esos eventos existen.'],
+    ux: ['Una bandeja transversal evita obligar al usuario a recordar qué pantalla origina cada tipo de conciliación; el detalle sigue siendo la fuente para operar.']
+  },
   ot: {
     proposito: 'Pantalla unificada (cisterna, barcaza, vagón) para revisar, editar y aprobar conciliaciones, con permisos finos por usuario. Parece la versión más nueva de la pantalla de conciliación.',
     quien: 'Analistas y jefes con permisos en CONFIGURACION_CONCILIACIONES.',
     cuando: 'Igual que "Conciliación cisterna".',
     pasos: ['Lee el recuadro "¿Qué hago ahora?": dice el paso actual, lo resalta en la pantalla con borde ámbar punteado ("Mostrar dónde") y lista las alternativas.', 'Los círculos ámbar numerados (1 a 8) marcan dónde se hace cada paso: 1 filtros, 2 casilla de la fila, 3 detalle, 4 Procesar, 5-6-8 botón ✔, 7 facturas.', 'Marca la casilla de una conciliación para ver su detalle: una fila por recepción. 🔎 muestra de dónde viene cada dato.', 'Corrige (tarifa de la lista, liberar merma, capacidad, tarifa especial, 🗑, "Nuevo convoy") y pulsa "Procesar".', 'Usa ✔ para avanzar de estado o ✖ para devolverla; después de la aceptación del transportista, el pedido se crea en "Contabilización y SAP" y la conciliación vuelve aquí para la liberación.', 'Si no ves un botón, revisa tus permisos al pie (cambia el rol en la cabecera).'],
     observar: ['Aquí la "aprobación del transportista" la pulsa un usuario de logística (defecto D22).', 'La tarifa de la fila es el PROMEDIO de sus líneas.'],
-    ux: ['Buena idea de V1: permisos finos por acción. Mala: botones que aparecen y desaparecen sin explicar por qué. El rediseño debería mostrar el botón deshabilitado con el motivo.']
+    ux: ['Buena idea de V1: permisos finos por acción. El prototipo mantiene los botones visibles pero deshabilitados hasta marcar la fila, mostrando el motivo en el título; así el usuario entiende qué le falta hacer.']
   },
   otmapa: {
-    proposito: 'Explica la conciliación de Otros Transportes de principio a fin: las 17 etapas desde la tarifa hasta el pago, cuáles se hacen dentro de la pantalla y cuáles fuera, qué entra y qué sale de cada una, las alternativas y el resultado final.',
+    proposito: 'Explica Otros Transportes de principio a fin con dos orígenes separados: las 17 etapas generales o los 18 hitos conectados, hasta facturas, SAP y estudio de pago/cierre. Nunca se acredita un pago real por avanzar en el mapa.',
     quien: 'Quien necesita entender el proceso completo antes de usar la pantalla o rediseñarla.',
     cuando: 'Antes de trabajar en "Conciliación Otros Transportes" o cuando no sabes qué sigue.',
-    pasos: ['Lee "¿Para qué existe?".', 'En "Sigue una conciliación" elige una: cada etapa se marca como Hecho, Estás aquí o pendiente, con el dato real de esa conciliación.', 'Fíjate en las franjas "AQUÍ EMPIEZA" y "AQUÍ TERMINA": delimitan el trabajo en Otros Transportes.', 'Consulta "Caminos alternativos" para saber qué hacer en cada situación.', 'Revisa "Resultado final esperado", "Qué sigue después" y "De dónde viene cada dato".'],
-    observar: ['La conciliación nace en "Detalle sin conciliar" (etapa 6), no en Otros Transportes.', 'Entre la aceptación del transportista y la liberación, la conciliación sale a SAP (pedido) y vuelve.', 'El pago ocurre fuera de SILOG.'],
+    pasos: ['Elige el origen: Escenarios generales o Mis documentos; un ID igual no significa que sea el mismo documento.', 'Selecciona la conciliación de ese origen. En Mis documentos, consulta sus solicitudes/HR, órdenes y CRE por sus relaciones.', 'Abre la sección de facturas: referencias, requisito SQL, cobros y propuesta documental separada.', 'En las guías O/T, Estudiar facturas de este ejemplo abre el mapa con la conciliación del escenario; no la copia al recorrido conectado.', 'Consulta los límites antes de interpretar una etiqueta como un paso completado o un pago real.'],
+    observar: ['La conciliación nace en "Detalle sin conciliar" (etapa 6 general), no en Otros Transportes.', 'Entre la aceptación del transportista y la liberación, la conciliación sale a SAP (pedido) y vuelve.', 'Pagos Logística abre un reporte de costos. El retorno financiero no se localizó en el circuito revisado; abonos/cierre se estudian como propuesta.'],
     ux: ['V1 no muestra este camino: el usuario debe saber de memoria qué pantalla sigue. El sistema nuevo debería mostrar en cada conciliación su etapa, el responsable y la siguiente acción.']
   },
   recargos: {
@@ -117,7 +125,7 @@ SILOG.INTRO_VISTAS = {
     quien: 'Analista de conciliaciones.',
     cuando: 'Antes de procesar, con la conciliación en elaboración.',
     pasos: ['Marca las multas o descuentos que correspondan (por despacho o por conciliación).', 'Agrega casos especiales o carro guía con monto y factura.', 'Revisa "Efecto en el neto" en modo V1 y en modo propuesto.'],
-    observar: ['En V1 solo la "multa transporte" entra al neto; el resto es informativo (D13).'],
+    observar: ['V1 procesado incluye multas CRE y contractuales dentro de Multa Transporte; MC/DC/casos/carro guía se suman al total visual OT pero no al NetoConciliado guardado de cisterna (D29). Abre el panel de cálculos para compararlos.'],
     ux: ['Un neto que no incluye todo lo que se cobra confunde a todos: en el rediseño, todo recargo es una línea del neto.']
   },
   sap: {
@@ -218,7 +226,7 @@ SILOG.AYUDA = {
   recCaso: { t: 'Caso especial / carro guía', que: 'Cobros puntuales con factura.', para: 'Pérdidas por accidente u otros servicios.', clic: 'Agrega la línea.', v1: '≥ 50.000 queda como factura impaga.', ux: '' },
   // SAP
   sapBoton: { t: 'Paso del circuito SAP', que: 'Pedido, liberación, hoja de entrada, aceptación o anulaciones.', para: 'Llevar la conciliación a pago.', clic: 'Cambia el estado SAP y, en algunos pasos, el de la conciliación.', v1: 'Sincronizaciones_To_SAP con credenciales SAP.', ux: 'Automatizar con reintentos y estado visible.' },
-  sapPagadas: { t: 'Marcar facturas pagadas', que: 'Registra el pago de facturas del transportista.', para: 'Destrabar el bloqueo de facturas impagas.', clic: 'Quita la marca de factura pendiente.', v1: '—', ux: '' },
+  sapPagadas: { t: 'Marcar facturas pagadas (cobros simulados)', que: 'Actualiza una marca de cobros por multas del escenario, no el pago del flete.', para: 'Estudiar el bloqueo de cobros sin hacer una transferencia.', clic: 'Solo cambia el bit simulado; no registra importe bancario ni pago a la empresa.', v1: 'FacturasDelTransportista marca bits de cobros por fila; este botón general es una simplificación.', ux: 'Separar marcas de cobranza, pagos del servicio y comprobantes financieros.' },
   // Portal
   portalAprobar: { t: 'Aprobar (transportista)', que: 'Aceptación del transportista.', para: 'Permitir crear el pedido SAP.', clic: 'Pasa a "Aprobada Por Transportista" y prepara SAP.', v1: '—', ux: 'Debe hacerlo el transportista autenticado.' },
   // DESTINO

@@ -1,0 +1,8 @@
+/* Solo el recorrido SHR/HR. No cambia fuentes, colores ni reglas de las otras vistas. */
+.hr-estados { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; margin: 16px 0; }
+.hr-estados article { padding: 16px; border: 1px solid var(--borde); border-radius: var(--radio); background: var(--resaltado); overflow-wrap: anywhere; }
+.hr-estados strong { display: block; font-size: 1.15rem; margin: 6px 0; }
+.hr-timeline { list-style: none; padding: 0 0 0 18px; border-inline-start: 2px solid var(--borde); }
+.hr-timeline li { position: relative; margin: 20px 0; }
+.hr-timeline li::before { content: ''; width: 10px; height: 10px; border-radius: 50%; background: var(--primario); position: absolute; inset-inline-start: -24px; top: 4px; }
+@media (max-width: 650px) { .hr-estados { grid-template-columns: minmax(0, 1fr); } }

@@ -4,7 +4,16 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Conciliaciones SILOG V1</title>
-  <link rel="stylesheet" href="css/estilos.css?v=20261003d">
+  <link rel="stylesheet" href="css/estilos.css?v=20261005a">
+  <link rel="stylesheet" href="css/estudio.css?v=20261017a">
+  <link rel="stylesheet" href="css/credito-debito.css?v=20261009a">
+  <link rel="stylesheet" href="css/multas-contractuales.css?v=20261012a">
+  <link rel="stylesheet" href="css/contratos-estudio.css?v=20261017a">
+  <link rel="stylesheet" href="css/ordenes-estudio.css?v=20261017a">
+  <link rel="stylesheet" href="css/hojas-ruta-estudio.css?v=20261017a">
+  <link rel="stylesheet" href="css/conciliaciones-estudio.css?v=20261017a">
+  <link rel="stylesheet" href="css/cre-estudio.css?v=20261017a">
+  <link rel="stylesheet" href="css/sap-estudio.css?v=20261017a">
 </head>
 <body data-modo="V1">
   <a class="saltar" href="#vista">Saltar al contenido</a>
@@ -44,15 +53,67 @@
   <aside id="tour" class="tour" hidden aria-live="polite" aria-label="Recorrido guiado"></aside>
   <div id="popover-ayuda" class="popover-ayuda" hidden role="dialog" aria-label="Ayuda"></div>
   <script>window.SILOG = { SIN_SQL: true };</script>
-  <script src="js/datos.js?v=20261003d"></script>
-  <script src="js/escenarios.js?v=20261003d"></script>
-  <script src="js/fuentes.js?v=20261003d"></script>
-  <script src="js/motor.js?v=20261003d"></script>
-  <script src="js/tour.js?v=20261003d"></script>
-  <script src="js/recorrido_ot.js?v=20261003d"></script>
-  <script src="js/ayuda.js?v=20261003d"></script>
-  <script src="js/estado.js?v=20261003d"></script>
-  <script src="js/vistas.js?v=20261003d"></script>
-  <script src="js/app.js?v=20261003d"></script>
+  <script src="js/datos.js?v=20261018d"></script>
+  <script src="js/escenarios.js?v=20261005a"></script>
+  <script src="js/fuentes.js?v=20261005a"></script>
+  <script src="js/motor.js?v=20261017a"></script>
+  <script src="js/contratos_estudio.js?v=20261018b"></script>
+  <script src="js/ordenes_estudio.js?v=20261018c"></script>
+  <script src="js/hojas_ruta_estudio.js?v=20261018b"></script>
+  <script src="js/cre_estudio.js?v=20261017b"></script>
+  <script src="js/datos_captura_multas.js"></script>
+  <script src="js/multas_contractuales.js?v=20261017b"></script>
+  <script src="js/credito_debito.js?v=20261009a"></script>
+  <script src="js/auditoria_calculos.js?v=20261017a"></script>
+  <script src="js/calculos_otros_medios.js?v=20261017a"></script>
+  <script src="js/multas_cre_estudio.js?v=20261018d"></script>
+  <script src="js/recargos_adicionales_estudio.js?v=20261018e"></script>
+  <script src="js/conciliaciones_estudio.js?v=20261018f"></script>
+  <script src="js/convoy_estudio.js?v=20261018f"></script>
+  <script src="js/evidencias_conciliaciones_estudio.js?v=20261018f"></script>
+  <script src="js/facturas_estudio.js?v=20261017b"></script>
+  <script src="js/evidencias_facturas_estudio.js?v=20261017a"></script>
+  <script src="js/sap_estudio.js?v=20261017a"></script>
+  <script src="js/evidencias_sap_estudio.js?v=20261017a"></script>
+  <script src="js/pagos_cierre_estudio.js?v=20261018e"></script>
+  <script src="js/evidencias_pagos_cierre_estudio.js?v=20261018a"></script>
+  <script src="js/tour.js?v=20261018c"></script>
+  <script src="js/recorrido_ot.js?v=20261018a"></script>
+  <script src="js/ayuda.js?v=20261018a"></script>
+  <script src="js/estado.js?v=20261018b"></script>
+  <script src="js/vistas.js?v=20261018c"></script>
+  <script src="js/vistas_multas_contractuales.js?v=20261012a"></script>
+  <script src="js/estudio_calculos.js?v=20261017a"></script>
+  <script src="js/estudio_otros_medios.js?v=20261017a"></script>
+  <script src="js/calculos_en_filas.js?v=20261009a"></script>
+  <script src="js/estudio_creditodebito.js?v=20261009a"></script>
+  <script src="js/vistas_contratos_estudio.js?v=20261018b"></script>
+  <script src="js/vistas_ordenes_estudio.js?v=20261018e"></script>
+  <script src="js/vistas_cre_estudio.js?v=20261018d"></script>
+  <script src="js/vistas_hojas_ruta_estudio.js?v=20261018c"></script>
+  <script src="js/vistas_conciliaciones_estudio.js?v=20261018f"></script>
+  <script src="js/vistas_convoy_estudio.js?v=20261018f"></script>
+  <script src="js/vistas_facturas_estudio.js?v=20261017c"></script>
+  <script src="js/vistas_sap_estudio.js?v=20261017a"></script>
+  <script src="js/vistas_pagos_cierre_estudio.js?v=20261018e"></script>
+  <script src="js/app.js?v=20261018d"></script>
+  <script src="js/vistas_multas_cre_estudio.js?v=20261018d"></script>
+  <script src="js/vistas_recargos_adicionales_estudio.js?v=20261018e"></script>
+  <script src="js/control_contratos_estudio.js?v=20261018b"></script>
+  <script src="js/control_ordenes_estudio.js?v=20261018b"></script>
+  <script src="js/control_cre_estudio.js?v=20261017a"></script>
+  <script src="js/control_hojas_ruta_estudio.js?v=20261017a"></script>
+  <script src="js/control_conciliaciones_estudio.js?v=20261018d"></script>
+  <script src="js/control_convoy_estudio.js?v=20261018f"></script>
+  <script src="js/control_multas_cre_estudio.js?v=20261018d"></script>
+  <script src="js/control_recargos_adicionales_estudio.js?v=20261018e"></script>
+  <script src="js/control_facturas_estudio.js?v=20261017a"></script>
+  <script src="js/control_sap_estudio.js?v=20261017a"></script>
+  <script src="js/control_pagos_cierre_estudio.js?v=20261018a"></script>
+  <script src="js/control_multas_contractuales.js?v=20261012a"></script>
+  <script src="js/recorrido_multas_ot.js?v=20261012a"></script>
+  <script src="js/recorrido_integrado_ot.js?v=20261018f"></script>
+  <script src="js/tour_expediente.js?v=20261018f"></script>
+  <script src="js/pasos_tour_conectado.js?v=20261018f"></script>
 </body>
 </html>

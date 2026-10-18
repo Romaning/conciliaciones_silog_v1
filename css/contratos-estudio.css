@@ -1,0 +1,21 @@
+/* Exclusivo del recorrido de contratos: no redefine botones, fuentes ni tokens globales. */
+.ct-estudio { min-width: 0; overflow-wrap: anywhere; }
+.ct-pasos { display: grid; grid-template-columns: repeat(auto-fit, minmax(155px, 1fr)); gap: 8px; margin: 18px 0; }
+.ct-pasos .btn { white-space: normal; text-align: left; min-height: 44px; }
+.ct-pasos [aria-current="step"] { border-color: var(--primario); background: var(--resaltado); font-weight: 700; }
+.ct-acciones { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 14px 0; }
+.ct-campos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin: 16px 0; }
+.ct-campos label { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.ct-estudio input:not([type="checkbox"]), .ct-estudio select { width: 100%; min-width: 0; box-sizing: border-box; }
+.ct-contexto { grid-template-columns: repeat(2, minmax(0, 1fr)); padding-bottom: 18px; border-bottom: 1px solid var(--borde); }
+.ct-estados { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; padding: 0; list-style: none; }
+.ct-estados li { padding: 14px; border: 1px solid var(--borde); border-radius: var(--radio); }
+.ct-estados small { display: block; margin-top: 8px; color: var(--tenue); }
+.ct-estados .ct-actual { border-color: var(--primario); background: var(--resaltado); }
+.ct-check { display: flex; align-items: center; gap: 8px; margin: 10px 0; }
+.ct-estudio caption { text-align: left; color: var(--tenue); margin-bottom: 8px; }
+.ct-estudio th, .ct-estudio td { white-space: normal; vertical-align: top; }
+.ct-navegacion { justify-content: space-between; border-top: 1px solid var(--borde); padding-top: 16px; }
+.ct-contenido h2 { scroll-margin-top: 100px; }
+@media (max-width: 1100px) { .ct-campos { grid-template-columns: repeat(2, minmax(0, 1fr)); } .ct-estados { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 650px) { .ct-campos, .ct-estados, .ct-contexto { grid-template-columns: minmax(0, 1fr); } .ct-estudio .btn { white-space: normal; } .ct-estudio .ct-acciones .btn { width: 100%; } }
